@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "stdio"],
+      "env": {"BRAVE_API_KEY": "YOUR_API_KEY", "BRAVE_MCP_ENABLED_TOOLS": "brave_web_search brave_news_search"}
+    },
+    "remote-example": {
+      "enabled": false,
+      "url": "http://localhost:8000/mcp",
+      "headers": {}
+    }
+  }
+}
