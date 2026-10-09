@@ -108,6 +108,45 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError):
                 await backend.chat("test", [], {}, lambda *_: None)
 
+    async def test_reasoning_only_after_tools_retries_and_can_name_chat(self):
+        requests, events = [], []
+        def handle(request):
+            data = json.loads(request.content)
+            requests.append(data)
+            if not data.get("stream"):
+                self.assertIn("Search Fedora", data["messages"][-1]["content"])
+                self.assertIn("Fedora answer", data["messages"][-1]["content"])
+                return httpx.Response(200, json={"done": True, "message": {"content": "Fedora Search"}})
+            if len(requests) == 1:
+                alias = data["tools"][0]["function"]["name"]
+                return response([{"message": {"tool_calls": [{"function": {"name": alias, "arguments": {"query": "Fedora"}}}]}, "done": True}])
+            if len(requests) == 2:
+                return response([{"message": {"thinking": "Unfinished reasoning", "content": " "}, "done": True, "done_reason": "length"}])
+            self.assertFalse(data["think"])
+            self.assertNotIn("tools", data)
+            self.assertTrue(all("thinking" not in m for m in data["messages"]))
+            self.assertEqual(data["messages"][-1]["role"], "tool")
+            self.assertIn("Result for Fedora", data["messages"][-1]["content"])
+            return response([{"message": {"content": "Fedora answer"}, "done": True}])
+        history = [{"role": "user", "content": "Search Fedora"}]
+        backend = Ollama("http://localhost", httpx.MockTransport(handle))
+        result = await backend.chat("test", history, SERVERS, lambda *e: events.append(e))
+        self.assertEqual(result[-1]["content"], "Fedora answer")
+        self.assertEqual(len(result), 3)
+        self.assertEqual(sum(e[0] == "tool-start" for e in events), 1)
+        self.assertEqual(await backend.title("test", history + result), "Fedora Search")
+        self.assertEqual(len(history), 1)
+
+    async def test_empty_answer_retry_is_bounded(self):
+        requests = []
+        def handle(request):
+            requests.append(json.loads(request.content))
+            return response([{"message": {"thinking": "No answer", "content": ""}, "done": True}])
+        backend = Ollama("http://localhost", httpx.MockTransport(handle))
+        with self.assertRaisesRegex(RuntimeError, "Ollama returned no answer"):
+            await backend.chat("test", [], {}, lambda *_: None)
+        self.assertEqual(len(requests), 2)
+
     async def test_cancellation_keeps_history(self):
         waiting = asyncio.Event()
         async def handle(_):

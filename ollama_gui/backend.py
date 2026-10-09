@@ -123,6 +123,7 @@ class Ollama:
 
     async def chat(self, model, history, servers, emit, hub_factory=ToolHub):
         messages = copy.deepcopy(history)
+        answer_retry = False
         # Changes are returned only when the turn is complete; cancellation leaves
         # the persisted model context free of unfinished tool-call sequences.
         async with asyncio.timeout(900):
@@ -138,7 +139,15 @@ class Ollama:
                         if old["role"] == "tool" and "display_content" in old:
                             api["content"] = old["display_content"][:60000]
                     payload = {"model": model, "messages": api_messages, "stream": True}
-                    if hub.tools:
+                    if answer_retry:
+                        # A reasoning-only completion is not an answer. Reuse the
+                        # successful tool results, without inviting more searches
+                        # or spending the retry's output budget on reasoning.
+                        payload["think"] = False
+                        payload["options"] = {"num_predict": 4096}
+                        for api in api_messages:
+                            api.pop("thinking", None)
+                    elif hub.tools:
                         payload["tools"] = hub.tools
                     message = {"role": "assistant", "content": ""}
                     calls, thinking, done = [], "", False
@@ -166,6 +175,12 @@ class Ollama:
                                 done = True
                     if not done:
                         raise RuntimeError("Ollama disconnected before completing its response.")
+                    if not calls and not message["content"].strip():
+                        if answer_retry:
+                            raise RuntimeError("Ollama returned no answer, even after retrying without thinking. Try again or choose another model.")
+                        answer_retry = True
+                        emit("round", None)
+                        continue
                     if thinking:
                         message["thinking"] = thinking
                     if calls:

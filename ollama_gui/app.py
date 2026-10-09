@@ -12,6 +12,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .backend import Ollama, ToolHub, test_brave_tool
+from . import __version__
 from .storage import DEFAULT_SETTINGS, PYTHON_SERVER_NAME, Store, brave_enabled, validate_servers, validate_url, configure_brave, tool_servers
 from .attachments import MAX_ATTACHMENTS, MAX_IMAGE_PIXELS, image_attachment, load_attachment, user_message
 from .markdown_view import MarkdownView
@@ -631,13 +632,27 @@ class Window(Adw.ApplicationWindow):
         self.update_actions()
 
     def actions(self):
-        for name, callback in (("new", lambda *_: self.new_chat()), ("preferences", lambda *_: Preferences(self).present(self)), ("refresh", lambda *_: self.refresh_models()), ("delete", self.delete_chat), ("search", lambda *_: self.open_search())):
+        for name, callback in (("new", lambda *_: self.new_chat()), ("preferences", lambda *_: Preferences(self).present(self)), ("refresh", lambda *_: self.refresh_models()), ("delete", self.delete_chat), ("search", lambda *_: self.open_search()), ("about", self.show_about)):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
             self.add_action(action)
         self.get_application().set_accels_for_action("win.new", ["<Control>n"])
         self.get_application().set_accels_for_action("win.preferences", ["<Control>comma"])
         self.get_application().set_accels_for_action("win.search", ["<Control>f"])
+
+    def show_about(self, *_):
+        dialog = Adw.AboutDialog(
+            application_name="Lumen",
+            application_icon=APP_ID,
+            version=__version__,
+            developer_name="Lumen Team",
+            developers=["Lumen Team"],
+            comments="A native GNOME chat app for Ollama with MCP tools.",
+            website="https://github.com/wfoyt/Lumen",
+            issue_url="https://github.com/wfoyt/Lumen/issues",
+        )
+        dialog.present(self)
+        return dialog
 
     def build_sidebar(self):
         toolbar = Adw.ToolbarView()
@@ -651,6 +666,7 @@ class Window(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append("Preferences", "win.preferences")
         menu.append("Refresh Models", "win.refresh")
+        menu.append("About Lumen", "win.about")
         self.app_menu = Gtk.MenuButton(icon_name="open-menu-symbolic", tooltip_text="Main Menu", menu_model=menu)
         self.sidebar_controls = Gtk.Box(spacing=6)
         self.sidebar_controls.append(self.new_chat_button)
