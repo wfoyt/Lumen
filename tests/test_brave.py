@@ -14,6 +14,21 @@ from ollama_gui.storage import brave_enabled, configure_brave, tool_servers, Sto
 
 
 class BraveSettingsTests(unittest.TestCase):
+    def test_master_switch_disables_all_tools_without_losing_configuration(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = Store(root)
+            store.settings.update(mcpServers=configure_brave({"custom": {"command": "fixture", "args": [], "disabled_tools": ["unused"]}}, "test-only-key"), brave_enabled=True)
+            original = copy.deepcopy(store.settings["mcpServers"])
+            store.settings["tools_enabled"] = False
+            store.save()
+            saved = Store(root).settings
+            self.assertEqual(tool_servers(saved), {})
+            self.assertEqual(saved["mcpServers"], original)
+            self.assertTrue(saved["python_enabled"])
+            saved["tools_enabled"] = True
+            self.assertEqual(set(tool_servers(saved)), {"Built-in Python", "brave-search", "custom"})
+
+
     def test_brave_enable_switch_preserves_key_and_excludes_disabled_server(self):
         with tempfile.TemporaryDirectory() as root:
             store = Store(root)

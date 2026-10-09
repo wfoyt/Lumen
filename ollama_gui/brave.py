@@ -18,7 +18,7 @@ async def search(kind, query, count=5, freshness="", transport=None):
     key_file = os.environ.get("BRAVE_API_KEY_FILE")
     key = Path(key_file).read_text().strip() if key_file else os.environ.get("BRAVE_API_KEY", "").strip()
     if not key:
-        raise ValueError("Add your Brave Search API key in Preferences, then Save Preferences.")
+        raise ValueError("Add your Brave Search API key in Preferences → Tools. Changes save automatically.")
     params = {"q": query, "count": count}
     if freshness:
         params["freshness"] = freshness

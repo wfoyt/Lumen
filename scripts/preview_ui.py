@@ -218,15 +218,17 @@ with tempfile.TemporaryDirectory() as root:
             node = snapshot.to_node()
             if node:
                 window.plus_menu.get_native().get_renderer().render_texture(node, None).save_to_png("/tmp/ollama-plus-collapsed.png")
-            window.tools_expander.set_expanded(True)
+            window.plus_menu.popdown()
+            window.tools_menu.popup()
+            window.tools_paintable = Gtk.WidgetPaintable.new(window.tools_menu)
             GLib.timeout_add(350, checked, tools)
         def tools():
             snapshot = Gtk.Snapshot()
-            window.plus_paintable.snapshot(snapshot, window.plus_menu.get_width(), window.plus_menu.get_height())
+            window.tools_paintable.snapshot(snapshot, window.tools_menu.get_width(), window.tools_menu.get_height())
             node = snapshot.to_node()
             if node:
-                window.plus_menu.get_native().get_renderer().render_texture(node, None).save_to_png("/tmp/ollama-plus-tools.png")
-            window.plus.popdown()
+                window.tools_menu.get_native().get_renderer().render_texture(node, None).save_to_png("/tmp/ollama-plus-tools.png")
+            window.tools_menu.popdown()
             GLib.timeout_add(250, checked, close)
         def close():
             window.worker.close()

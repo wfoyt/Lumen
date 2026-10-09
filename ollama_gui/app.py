@@ -19,10 +19,14 @@ from .tool_view import tool_view
 from .tool_output import saved_tool_details, searchable_chat_text, tool_display_name
 from .model_picker import ModelPicker
 from .image_view import image_thumbnails, image_preview
+from .attachment_view import file_preview
 from .instructions import DEFAULT_INSTRUCTIONS, LEGACY_INSTRUCTIONS, PREVIOUS_DEFAULT_INSTRUCTIONS, custom_instructions_enabled, system_instructions
 from .titles import clean_title, needs_title
 from .title_view import FadingTitle
 from .composer import ComposerScroll
+from .branding import APP_ID, LanternPaintable
+from .setup_view import SetupView
+from . import history
 
 
 class Worker:
@@ -99,6 +103,8 @@ class Preferences(Adw.PreferencesDialog):
         self.window = window
         self.set_content_width(660)
         self.set_content_height(720)
+        self.loading_fields = True
+        self.autosave_pending = None
         cfg = window.store.settings
         page = Adw.PreferencesPage(title="General", icon_name="preferences-system-symbolic")
         self.general_page = page
@@ -107,7 +113,18 @@ class Preferences(Adw.PreferencesDialog):
         self.url = Adw.EntryRow(title="Server URL", text=cfg["url"])
         connection.add(self.url)
         tools_group = Adw.PreferencesGroup(title="Tools")
-        page.add(tools_group)
+        tools_page = Adw.PreferencesPage(title="Tools", icon_name="applications-science-symbolic")
+        self.tools_page = tools_page
+        self.add(tools_page)
+        tools_control = Adw.PreferencesGroup()
+        tools_page.add(tools_control)
+        self.tools_enabled = Adw.SwitchRow(title="Enable Tools", subtitle="Allow models to use Python, Brave Search and configured MCP tools.", active=cfg.get("tools_enabled", True))
+        tools_control.add(self.tools_enabled)
+        self.tools_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
+        tool_settings = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        self.tools_revealer.set_child(tool_settings)
+        tools_control.add(self.tools_revealer)
+        tool_settings.append(tools_group)
         self.tools_group = tools_group
         local_tools = Adw.PreferencesGroup()
         tools_group.add(local_tools)
@@ -119,7 +136,7 @@ class Preferences(Adw.PreferencesDialog):
         self.brave_enabled = Adw.SwitchRow(title="Enable Brave Search", subtitle="Search the web and news with your API key.", active=brave_enabled(cfg))
         brave.add(self.brave_enabled)
         self.brave_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-        brave_fields = Adw.PreferencesGroup(description="Enter your API key, then set up Brave Search to save it.", margin_top=12)
+        brave_fields = Adw.PreferencesGroup(description="Enter your API key. Changes are saved automatically.", margin_top=12)
         self.brave_revealer.set_child(brave_fields)
         brave.add(self.brave_revealer)
         self.key = Adw.PasswordEntryRow(title="API Key")
@@ -155,8 +172,10 @@ class Preferences(Adw.PreferencesDialog):
         self.friendly_search = Adw.SwitchRow(title="Format Brave Search Calls", subtitle="Show search queries and links instead of tool names and JSON.", active=cfg.get("friendly_search", True))
         self.friendly_python = Adw.SwitchRow(title="Format Python Calls", subtitle="Show executed code and results instead of raw JSON.", active=cfg.get("friendly_python", True))
         display.add(self.show_thinking)
-        display.add(self.friendly_search)
-        display.add(self.friendly_python)
+        tool_display = Adw.PreferencesGroup(title="Tool Display")
+        tool_settings.append(tool_display)
+        tool_display.add(self.friendly_search)
+        tool_display.add(self.friendly_python)
         advanced.add(connection)
         math = Adw.PreferencesGroup(title="Equations")
         advanced.add(math)
@@ -171,7 +190,7 @@ class Preferences(Adw.PreferencesDialog):
         self.system_revealer.set_child(preferences_editor(self.system, 180, 280))
         prompt.add(self.system_revealer)
         self.custom_system.connect("notify::active", self.update_advanced_editors)
-        tools = Adw.PreferencesGroup(title="MCP Servers", description="Brave Search is configured on the General page. For other servers, enable custom configuration and supply mcpServers JSON with command / args / env, or url / headers for Streamable HTTP. Add servers you trust.")
+        tools = Adw.PreferencesGroup(title="MCP Servers", description="Brave Search is configured on the Tools page. For other servers, enable custom configuration and supply mcpServers JSON with command / args / env, or url / headers for Streamable HTTP. Add servers you trust.")
         advanced.add(tools)
         self.custom_mcp = Adw.SwitchRow(title="Edit Custom MCP Configuration", subtitle="Saved servers keep working when this editor is hidden.", active=cfg.get("custom_mcp_enabled", False))
         tools.add(self.custom_mcp)
@@ -184,9 +203,13 @@ class Preferences(Adw.PreferencesDialog):
         self.custom_mcp.connect("notify::active", self.update_advanced_editors)
         apply = Adw.PreferencesGroup()
         page.add(apply)
-        apply.add(self.preference_buttons())
         self.result = Gtk.Label(wrap=True, xalign=0)
         apply.add(self.result)
+        tools_apply = Adw.PreferencesGroup()
+        tools_page.add(tools_apply)
+        tools_result = Gtk.Label(wrap=True, xalign=0)
+        self.result.bind_property("label", tools_result, "label", 2)
+        tools_apply.add(tools_result)
         advanced_apply = Adw.PreferencesGroup()
         advanced.add(advanced_apply)
         advanced_apply.add(self.preference_buttons(advanced=True))
@@ -214,6 +237,46 @@ class Preferences(Adw.PreferencesDialog):
         self.update_advanced_editors()
         self.update_brave_button()
         self.update_brave_fields()
+        self.tools_enabled.connect("notify::active", self.update_tools_fields)
+        self.update_tools_fields()
+        self.loading_fields = False
+        for toggle in (self.tools_enabled, self.python_enabled, self.brave_enabled, self.auto_titles, self.show_thinking, self.friendly_search, self.friendly_python, self.latex_enabled, self.custom_system, self.custom_mcp):
+            toggle.connect("notify::active", self.autosave_switch)
+        for field in (self.url, self.key):
+            field.connect("changed", self.queue_autosave)
+        for editor in (self.system, self.servers):
+            editor.get_buffer().connect("changed", self.queue_autosave)
+        self.connect("closed", self.preferences_closed)
+
+    def preferences_closed(self, *_):
+        if self.autosave_pending is not None:
+            self.flush_autosave()
+
+    def autosave_switch(self, *_):
+        if not self.loading_fields:
+            self.flush_autosave()
+
+    def queue_autosave(self, *_):
+        if self.loading_fields:
+            return
+        if self.autosave_pending is not None:
+            GLib.source_remove(self.autosave_pending)
+        self.autosave_pending = GLib.timeout_add(450, self.flush_autosave)
+
+    def flush_autosave(self, *_):
+        if self.autosave_pending is not None:
+            GLib.source_remove(self.autosave_pending)
+            self.autosave_pending = None
+        if not self.loading_fields:
+            self.save()
+        return GLib.SOURCE_REMOVE
+
+    def update_tools_fields(self, *_):
+        enabled = self.tools_enabled.get_active()
+        self.tools_revealer.set_visible(enabled)
+        self.tools_revealer.set_reveal_child(enabled)
+        if not enabled:
+            self.cancel_test()
 
     def update_brave_fields(self, *_):
         enabled = self.brave_enabled.get_active()
@@ -229,9 +292,6 @@ class Preferences(Adw.PreferencesDialog):
             self.advanced_test = Gtk.Button(label="Test Servers", visible=self.custom_mcp.get_active())
             self.advanced_test.connect("clicked", self.test_servers)
             buttons.append(self.advanced_test)
-        save = Gtk.Button(label="Save Preferences", css_classes=["suggested-action"])
-        save.connect("clicked", self.save)
-        buttons.append(save)
         return buttons
 
     def update_advanced_editors(self, *_):
@@ -266,11 +326,14 @@ class Preferences(Adw.PreferencesDialog):
             self.brave_setup.remove_css_class("suggested-action")
 
     def load_saved_fields(self):
+        self.loading_fields = True
         cfg = self.window.store.settings
         self.url.set_text(cfg["url"])
         self.system.get_buffer().set_text(DEFAULT_INSTRUCTIONS if cfg["system"] in (LEGACY_INSTRUCTIONS, PREVIOUS_DEFAULT_INSTRUCTIONS) else cfg["system"])
         self.custom_system.set_active(custom_instructions_enabled(cfg))
         self.custom_mcp.set_active(cfg.get("custom_mcp_enabled", False))
+        self.tools_enabled.set_active(cfg.get("tools_enabled", True))
+        self.update_tools_fields()
         self.python_enabled.set_active(cfg.get("python_enabled", True))
         self.auto_titles.set_active(cfg.get("auto_titles", True))
         self.show_thinking.set_active(cfg.get("show_thinking", False))
@@ -285,6 +348,7 @@ class Preferences(Adw.PreferencesDialog):
         self.update_advanced_editors()
         self.update_brave_button()
         self.update_brave_fields()
+        self.loading_fields = False
 
     def reset_all_data(self, *_):
         dialog = Adw.AlertDialog(heading="Reset All App Data?", body="Permanently delete every conversation, saved attachment, draft, API key and preference in this app. This cannot be undone.")
@@ -362,7 +426,7 @@ class Preferences(Adw.PreferencesDialog):
             saved = copy.deepcopy(self.window.store.settings["mcpServers"])
             saved["brave-search"] = servers["brave-search"]
             saved["brave-search"]["enabled"] = True
-            cfg = {**self.window.store.settings, "mcpServers": saved, "brave_enabled": True}
+            cfg = {**self.window.store.settings, "mcpServers": saved, "brave_enabled": True, "tools_enabled": self.tools_enabled.get_active()}
             self.window.store.write("settings.json", cfg)
             self.window.store.settings = cfg
             self.brave_enabled.set_active(True)
@@ -370,7 +434,7 @@ class Preferences(Adw.PreferencesDialog):
             self.servers.get_buffer().set_text(json.dumps({"mcpServers": servers}, indent=2))
             self.update_brave_button()
             self.window.refresh_tools()
-            self.brave_result.set_text("Brave Search saved. Search tools will appear in the + menu.")
+            self.brave_result.set_text("Brave Search saved. Search tools will appear in the Tools menu.")
         except Exception as exc:
             self.brave_result.set_text(str(exc))
 
@@ -411,28 +475,57 @@ class Preferences(Adw.PreferencesDialog):
                     return f"Connected. {len(hub.tools)} tools available."
         self.run_test(button, test(), self.result, "Connecting to MCP servers…")
 
-    def save(self, _):
+    def save(self, _=None):
+        if self.loading_fields:
+            return
         try:
-            cfg = {**self.window.store.settings, "url": validate_url(self.url.get_text().strip()),
+            previous = self.window.store.settings
+            key_changed = self.key.get_text().strip() != self.initial_brave_key.strip()
+            errors = []
+            try:
+                url = validate_url(self.url.get_text().strip())
+            except ValueError as exc:
+                url = previous["url"]
+                errors.append(str(exc))
+            try:
+                servers = self.parsed()
+            except (ValueError, TypeError) as exc:
+                servers = copy.deepcopy(previous["mcpServers"])
+                errors.append(str(exc))
+            cfg = {**self.window.store.settings, "url": url,
                    "system": buffer_text(self.system), "custom_system_enabled": self.custom_system.get_active(),
-                   "custom_mcp_enabled": self.custom_mcp.get_active(), "mcpServers": self.parsed(),
+                   "custom_mcp_enabled": self.custom_mcp.get_active(), "mcpServers": servers,
+                   "tools_enabled": self.tools_enabled.get_active(),
                    "python_enabled": self.python_enabled.get_active(), "auto_titles": self.auto_titles.get_active(),
                    "show_thinking": self.show_thinking.get_active(), "friendly_search": self.friendly_search.get_active(),
                    "friendly_python": self.friendly_python.get_active(), "brave_enabled": self.brave_enabled.get_active(),
                    "latex_enabled": self.latex_enabled.get_active()}
-            if cfg["brave_enabled"] and "brave-search" not in cfg["mcpServers"]:
-                raise ValueError("Enter your Brave Search API key before saving.")
             if "brave-search" in cfg["mcpServers"]:
                 cfg["mcpServers"]["brave-search"]["enabled"] = cfg["brave_enabled"]
-            self.window.store.write("settings.json", cfg)
-            self.window.store.settings = cfg
-            if not cfg["auto_titles"]:
-                self.window.cancel_titles()
-            self.window.render_chat()
-            self.window.refresh_models()
-            self.window.refresh_tools()
-            self.window.request_title(self.window.current)
-            self.close()
+            if cfg != previous:
+                self.window.store.write("settings.json", cfg)
+                self.window.store.settings = cfg
+                if not cfg["auto_titles"]:
+                    self.window.cancel_titles()
+                display_keys = ("show_thinking", "friendly_search", "friendly_python", "latex_enabled")
+                if not self.window.busy and any(cfg.get(key) != previous.get(key) for key in display_keys):
+                    self.window.render_chat()
+                if cfg["url"] != previous["url"]:
+                    self.window.refresh_models()
+                tool_keys = ("mcpServers", "tools_enabled", "python_enabled", "brave_enabled")
+                if any(cfg.get(key) != previous.get(key) for key in tool_keys):
+                    self.window.render_tool_choices()
+                    self.window.refresh_tools()
+                if cfg["auto_titles"] and not previous.get("auto_titles", True):
+                    self.window.request_title(self.window.current)
+            if not errors:
+                self.initial_brave_key = self.key.get_text().strip()
+                if key_changed or not self.custom_mcp.get_active():
+                    self.loading_fields = True
+                    self.servers.get_buffer().set_text(json.dumps({"mcpServers": cfg["mcpServers"]}, indent=2))
+                    self.loading_fields = False
+            self.update_brave_button()
+            self.result.set_text("; ".join(errors))
         except Exception as exc:
             self.result.set_text(str(exc))
 
@@ -441,6 +534,7 @@ class Window(Adw.ApplicationWindow):
     def __init__(self, app, store=None):
         super().__init__(application=app, title="Lumen", default_width=1080, default_height=760)
         self.store = store or Store()
+        self.setup = None
         self.worker = Worker()
         self.current = None
         self.future = None
@@ -452,8 +546,13 @@ class Window(Adw.ApplicationWindow):
         self.follow_response = True
         self.scroll_pending = None
         self.model_names = []
+        self.capability_cache = {}
+        self.capability_errors = {}
+        self.capability_jobs = {}
         self.attachments = []
         self.pending_attachments = []
+        self.revision_parent = None
+        self.reply_model = ""
         self.thinking_label = None
         self.thinking_card = None
         self.thinking_spinner = None
@@ -469,7 +568,7 @@ class Window(Adw.ApplicationWindow):
         self.title_jobs = {}
         icons = Gtk.IconTheme.get_for_display(self.get_display())
         icons.add_search_path(str(Path(__file__).parent / "icons"))
-        self.set_icon_name("ollama-chat-symbolic")
+        self.set_icon_name(APP_ID)
         css = Gtk.CssProvider()
         css.load_from_data(b"""
             .message-composer textview, .message-composer textview text,
@@ -506,6 +605,21 @@ class Window(Adw.ApplicationWindow):
         self.build_chat()
         self.actions()
         self.connect("close-request", self.on_close)
+        if self.store.needs_setup:
+            self.setup = SetupView(self.store.settings, self.lantern_paintable, self.finish_setup)
+            self.toast.set_child(self.setup)
+            self.update_actions()
+        else:
+            self.start_chat()
+
+    def finish_setup(self, settings):
+        self.store.write("settings.json", settings)
+        self.store.settings = settings
+        self.setup = None
+        self.toast.set_child(self.split)
+        self.start_chat()
+
+    def start_chat(self):
         if self.store.chats:
             self.current = self.store.chats[0]
         else:
@@ -533,13 +647,13 @@ class Window(Adw.ApplicationWindow):
         header.set_title_widget(Gtk.Label(label="Lumen", ellipsize=Pango.EllipsizeMode.END, css_classes=["heading"]))
         self.search_button = Gtk.ToggleButton(icon_name="edit-find-symbolic", tooltip_text="Search Conversations (Ctrl+F)")
         header.pack_start(self.search_button)
-        new = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="New Conversation (Ctrl+N)", action_name="win.new")
+        self.new_chat_button = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="New Conversation (Ctrl+N)", action_name="win.new")
         menu = Gio.Menu()
         menu.append("Preferences", "win.preferences")
         menu.append("Refresh Models", "win.refresh")
         self.app_menu = Gtk.MenuButton(icon_name="open-menu-symbolic", tooltip_text="Main Menu", menu_model=menu)
         self.sidebar_controls = Gtk.Box(spacing=6)
-        self.sidebar_controls.append(new)
+        self.sidebar_controls.append(self.new_chat_button)
         self.sidebar_controls.append(self.app_menu)
         header.pack_end(self.sidebar_controls)
         toolbar.add_top_bar(header)
@@ -570,9 +684,13 @@ class Window(Adw.ApplicationWindow):
     def build_chat(self):
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        toggle = Gtk.ToggleButton(icon_name="sidebar-show-symbolic", tooltip_text="Show Conversations")
-        self.split.bind_property("show-sidebar", toggle, "active", 3)
-        header.pack_start(toggle)
+        self.sidebar_toggle = Gtk.ToggleButton(icon_name="sidebar-show-symbolic", tooltip_text="Show Conversations")
+        self.split.bind_property("show-sidebar", self.sidebar_toggle, "active", 3)
+        self.chat_header_controls = Gtk.Box(spacing=6)
+        self.chat_header_controls.append(self.sidebar_toggle)
+        header.pack_start(self.chat_header_controls)
+        self.split.connect("notify::show-sidebar", self.move_new_chat_button)
+        self.move_new_chat_button()
         self.chat_title = Gtk.Label(label="New Conversation", ellipsize=Pango.EllipsizeMode.END,
                                     single_line_mode=True, max_width_chars=40, css_classes=["heading"])
         header.set_title_widget(self.chat_title)
@@ -584,7 +702,8 @@ class Window(Adw.ApplicationWindow):
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.messages = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20, css_classes=["chat-transcript"])
         margins(self.messages, 24)
-        self.empty = Adw.StatusPage(icon_name="ollama-chat-symbolic", title="A conversation starts here", description="Choose a model and ask a question. Use the + menu to attach files or images and choose tools.")
+        self.lantern_paintable = LanternPaintable()
+        self.empty = Adw.StatusPage(paintable=self.lantern_paintable, title="A conversation starts here", description="Choose a model and ask a question. Use + to attach files or images, and the Tools menu to choose tools.")
         self.stack = Gtk.Stack(vexpand=True, transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=200)
         self.stack.add_named(self.empty, "empty")
         clamp = Adw.Clamp(maximum_size=800, tightening_threshold=600)
@@ -617,8 +736,8 @@ class Window(Adw.ApplicationWindow):
         overlay.add_overlay(placeholder)
         self.input.get_buffer().connect("changed", lambda buf: placeholder.set_visible(buf.get_char_count() == 0))
         self.composer_card.append(overlay)
-        controls = margins(Gtk.Box(spacing=8), 8)
-        self.plus = Gtk.MenuButton(icon_name="list-add-symbolic", tooltip_text="Add Attachments and Tools", css_classes=["flat", "circular"])
+        controls = margins(Gtk.Box(spacing=6), 8)
+        self.plus = Gtk.MenuButton(icon_name="list-add-symbolic", tooltip_text="Add Files or Images", css_classes=["flat", "circular"])
         self.plus_menu = Gtk.Popover()
         menu_box = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4), 6)
         for title, icon, kind in (("Add Files…", "document-new-symbolic", "file"), ("Add Images…", "insert-image-symbolic", "image")):
@@ -628,11 +747,17 @@ class Window(Adw.ApplicationWindow):
             row.append(Gtk.Label(label=title, xalign=0, hexpand=True))
             button.set_child(row)
             button.connect("clicked", lambda _, value=kind: self.choose_attachments(value))
+            if kind == "image":
+                self.images_button = button
+                button.set_sensitive(False)
+                button.set_tooltip_text("Choose a vision model to attach images")
             menu_box.append(button)
-        menu_box.append(Gtk.Separator())
-        self.tools_expander = Gtk.Expander(label="Tools", expanded=False,
-                                           margin_start=8, margin_end=8, margin_top=8)
-        tools_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=8)
+        self.plus_menu.set_child(menu_box)
+        self.plus.set_popover(self.plus_menu)
+        controls.append(self.plus)
+        self.tools_button = Gtk.MenuButton(icon_name="applications-science-symbolic", tooltip_text="Tools", css_classes=["flat", "circular"], visible=self.store.settings.get("tools_enabled", True))
+        self.tools_menu = Gtk.Popover()
+        tools_box = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4), 6)
         self.tool_choices = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         tool_scroll = Gtk.ScrolledWindow(max_content_height=280, min_content_width=260, propagate_natural_height=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
         tool_scroll.set_child(self.tool_choices)
@@ -640,11 +765,9 @@ class Window(Adw.ApplicationWindow):
         self.refresh_tools_button = Gtk.Button(label="Refresh Tools", css_classes=["flat"])
         self.refresh_tools_button.connect("clicked", lambda *_: self.refresh_tools())
         tools_box.append(self.refresh_tools_button)
-        self.tools_expander.set_child(tools_box)
-        menu_box.append(self.tools_expander)
-        self.plus_menu.set_child(menu_box)
-        self.plus.set_popover(self.plus_menu)
-        controls.append(self.plus)
+        self.tools_menu.set_child(tools_box)
+        self.tools_button.set_popover(self.tools_menu)
+        controls.append(self.tools_button)
         self.model_clamp = Adw.Clamp(maximum_size=240, tightening_threshold=240, hexpand=False)
         self.model_clamp.set_child(self.models)
         controls.append(self.model_clamp)
@@ -663,6 +786,16 @@ class Window(Adw.ApplicationWindow):
 
     def notify(self, message):
         self.toast.add_toast(Adw.Toast(title=message))
+
+    def move_new_chat_button(self, *_):
+        target = self.sidebar_controls if self.split.get_show_sidebar() else self.chat_header_controls
+        parent = self.new_chat_button.get_parent()
+        if parent is not target:
+            parent.remove(self.new_chat_button)
+            if target is self.sidebar_controls:
+                target.prepend(self.new_chat_button)
+            else:
+                target.append(self.new_chat_button)
 
     def open_search(self):
         self.split.set_show_sidebar(True)
@@ -727,10 +860,13 @@ class Window(Adw.ApplicationWindow):
         self.tools_future = self.worker.submit(discover(), done)
 
     def render_tool_choices(self):
+        self.tools_button.set_visible(self.store.settings.get("tools_enabled", True))
         while child := self.tool_choices.get_first_child():
             self.tool_choices.remove(child)
-        self.refresh_tools_button.set_sensitive(not self.tools_loading and not self.future)
-        if self.tools_loading:
+        self.refresh_tools_button.set_sensitive(self.store.settings.get("tools_enabled", True) and not self.tools_loading and not self.future)
+        if not self.store.settings.get("tools_enabled", True):
+            self.tool_choices.append(margins(Gtk.Label(label="Tools are disabled. Enable them in Preferences → Tools.", wrap=True, max_width_chars=32, xalign=0, css_classes=["dim-label"]), 8))
+        elif self.tools_loading:
             self.tool_choices.append(margins(Gtk.Label(label="Discovering tools…", xalign=0, css_classes=["dim-label"]), 8))
         else:
             last_server = None
@@ -776,7 +912,7 @@ class Window(Adw.ApplicationWindow):
     def servers_for_chat(self):
         servers = tool_servers(self.store.settings)
         if not self.store.settings.get("python_enabled", True):
-            del servers[PYTHON_SERVER_NAME]
+            servers.pop(PYTHON_SERVER_NAME, None)
         for name in list(servers):
             known = [tool["name"] for tool in self.tool_catalog if tool["server"] == name]
             if known and all(tool in servers[name].get("disabled_tools", []) for tool in known):
@@ -784,6 +920,8 @@ class Window(Adw.ApplicationWindow):
         return servers
 
     def tool_configuration(self, name):
+        if not self.store.settings.get("tools_enabled", True):
+            return None
         if name == PYTHON_SERVER_NAME:
             return {"disabled_tools": [] if self.store.settings.get("python_enabled", True) else ["execute_python"]}
         if name == "brave-search" and not brave_enabled(self.store.settings):
@@ -832,6 +970,8 @@ class Window(Adw.ApplicationWindow):
 
     def choose_attachments(self, kind):
         self.plus_menu.popdown()
+        if kind == "image" and not self.require_vision():
+            return
         dialog = Gtk.FileDialog(title="Add Images" if kind == "image" else "Add Files (Text or PDF)", accept_label="Add")
         if kind == "image":
             image_filter = Gtk.FileFilter(name="Images (PNG, JPEG, WebP)")
@@ -850,6 +990,8 @@ class Window(Adw.ApplicationWindow):
                 self.notify(f"Could not open attachments: {exc.message}")
                 return
             if self.future or self.current["id"] != chat_id:
+                return
+            if kind == "image" and not self.require_vision():
                 return
             if len(self.attachments) + files.get_n_items() > MAX_ATTACHMENTS:
                 self.notify(f"Attach up to {MAX_ATTACHMENTS} files or images per message.")
@@ -870,7 +1012,7 @@ class Window(Adw.ApplicationWindow):
                 self.set_busy(self.busy)
                 if error:
                     self.notify(error_text(error))
-                elif self.current["id"] == chat_id:
+                elif self.current["id"] == chat_id and (kind != "image" or self.require_vision()):
                     self.attachments.extend(items)
                     self.render_attachments()
                 self.input.grab_focus()
@@ -885,8 +1027,7 @@ class Window(Adw.ApplicationWindow):
             if attachment["kind"] == "image":
                 chip.append(image_preview(attachment, draft=True))
             else:
-                chip.append(Gtk.Image(icon_name="application-pdf-symbolic" if attachment["name"].lower().endswith(".pdf") else "text-x-generic-symbolic"))
-                chip.append(Gtk.Label(label=attachment["name"], ellipsize=3, max_width_chars=22, tooltip_text=attachment["name"]))
+                chip.append(file_preview(attachment))
             remove = Gtk.Button(icon_name="window-close-symbolic", tooltip_text=f"Remove {attachment['name']}", css_classes=["flat", "circular"])
             def remove_attachment(_, item=attachment):
                 self.attachments.remove(item)
@@ -896,8 +1037,11 @@ class Window(Adw.ApplicationWindow):
             self.attachment_chips.append(chip)
             chip.get_parent().set_focusable(False)
         self.attachment_chips.set_visible(bool(self.attachments))
+        self.update_image_controls()
 
     def save_store(self):
+        for chat in self.store.chats:
+            history.checkpoint(chat)
         try:
             self.store.save()
         except OSError as exc:
@@ -921,7 +1065,7 @@ class Window(Adw.ApplicationWindow):
         self.refresh_tools()
 
     def new_chat(self):
-        if self.busy or self.draft_loading:
+        if self.setup is not None or self.busy or self.draft_loading:
             return
         self.search_bar.set_search_mode(False)
         # Every entry point, including Ctrl+N and direct calls, reuses a blank.
@@ -943,9 +1087,9 @@ class Window(Adw.ApplicationWindow):
         self.save_store()
 
     def update_actions(self):
-        available = not self.busy and not self.draft_loading
+        available = self.setup is None and not self.busy and not self.draft_loading
         self.lookup_action("new").set_enabled(available and not any(not chat["messages"] for chat in self.store.chats))
-        for name in ("delete", "preferences", "refresh"):
+        for name in ("delete", "preferences", "refresh", "search"):
             self.lookup_action(name).set_enabled(available)
 
     def activate_chat(self, chat):
@@ -1133,19 +1277,26 @@ class Window(Adw.ApplicationWindow):
         self.clear_messages()
         details = saved_tool_details(self.current["messages"])
         response_parts = []
+        turn_index = None
+        response_model = ""
         def response(final=False):
             if response_parts:
                 self.message_card("assistant", "\n\n".join(response_parts),
-                                  expanded_codes=final_code_expansion if final else ())
+                                  expanded_codes=final_code_expansion if final else (),
+                                  message_index=turn_index, model=response_model)
                 response_parts.clear()
         for index, message in enumerate(self.current["messages"]):
             if message["role"] == "user":
                 response()
+                turn_index = index
+                response_model = ""
                 self.message_card("user", message.get("display_content", message.get("content", "")),
-                                  message.get("attachments", []), images=message.get("images", []))
+                                  message.get("attachments", []), images=message.get("images", []), message_index=index,
+                                  file_message=message)
             elif message["role"] == "tool":
                 self.tool_card(text=message.get("display_content", message["content"]), **details[index])
             elif message["role"] == "assistant":
+                response_model = message.get("model", response_model)
                 if message.get("thinking") and self.store.settings.get("show_thinking", False):
                     expander, _ = self.reasoning_view(message["thinking"])
                     self.activity().append(expander)
@@ -1185,7 +1336,7 @@ class Window(Adw.ApplicationWindow):
             return GLib.SOURCE_REMOVE
         button.copy_pending = GLib.timeout_add(2000, reset)
 
-    def message_card(self, role, text, attachments=(), expanded_codes=(), images=()):
+    def message_card(self, role, text, attachments=(), expanded_codes=(), images=(), message_index=None, model="", file_message=None):
         if self.stack.get_visible_child_name() == "empty":
             self.clear_messages()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -1201,6 +1352,16 @@ class Window(Adw.ApplicationWindow):
             label = Gtk.Label(label=text, wrap=True, selectable=True, xalign=0, use_markup=False)
             label.set_wrap_mode(2)
         copy_button.connect("clicked", lambda button: self.copy_message(button, label))
+        if model and role == "assistant":
+            top.append(Gtk.Label(label=model, ellipsize=Pango.EllipsizeMode.END, max_width_chars=18,
+                                 tooltip_text=model, css_classes=["dim-label"]))
+        if message_index is not None:
+            self.add_version_controls(top, message_index)
+            action = Gtk.Button(icon_name="document-edit-symbolic" if role == "user" else "view-refresh-symbolic",
+                                tooltip_text="Edit Message" if role == "user" else "Regenerate Response",
+                                css_classes=["flat"], sensitive=not self.busy)
+            action.connect("clicked", lambda *_: self.revision_dialog(message_index, edit=role == "user"))
+            top.append(action)
         top.append(copy_button)
         box.append(top)
         box.append(label)
@@ -1212,14 +1373,7 @@ class Window(Adw.ApplicationWindow):
                 image_index += 1
                 thumbnails.append(image_preview(attachment, encoded=data))
                 continue
-            detail = Gtk.Box(spacing=6)
-            detail.add_css_class("card")
-            detail.set_margin_top(4)
-            detail.set_margin_bottom(4)
-            detail.append(Gtk.Image(icon_name="application-pdf-symbolic" if attachment["name"].lower().endswith(".pdf") else "text-x-generic-symbolic", margin_start=12, margin_top=12, margin_bottom=12))
-            detail.append(Gtk.Label(label=attachment["name"], xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE,
-                                    max_width_chars=28, tooltip_text=attachment["name"], margin_end=12))
-            thumbnails.append(detail)
+            thumbnails.append(file_preview(attachment, file_message))
         if role == "user":
             outer = Gtk.Box(css_classes=["card"])
             box.set_hexpand(True)
@@ -1267,7 +1421,71 @@ class Window(Adw.ApplicationWindow):
         if self.busy and self.follow_response:
             self.scroll_bottom()
 
+    def supports_images(self, model=None):
+        model = model or self.store.settings.get("model", "")
+        return "vision" in self.capability_cache.get((self.store.settings["url"], model), set())
+
+    def ensure_capabilities(self, model, callback=None):
+        if not model or model not in self.model_names:
+            return
+        key = (self.store.settings["url"], model)
+        if key in self.capability_cache:
+            return
+        if key in self.capability_jobs:
+            if callback and callback not in self.capability_jobs[key]["callbacks"]:
+                self.capability_jobs[key]["callbacks"].append(callback)
+            return
+        job = {"callbacks": [callback] if callback else [], "future": None}
+        self.capability_jobs[key] = job
+        def done(capabilities, error):
+            if self.closed or self.capability_jobs.get(key) is not job:
+                return
+            self.capability_jobs.pop(key)
+            self.capability_cache[key] = capabilities if not error else set()
+            if error:
+                self.capability_errors[key] = error_text(error)
+            self.update_image_controls()
+            for updated in job["callbacks"]:
+                updated()
+        job["future"] = self.worker.submit(Ollama(key[0]).model_capabilities(model), done)
+        self.update_image_controls()
+
+    def image_support_message(self, model=None):
+        model = model or self.store.settings.get("model", "")
+        key = (self.store.settings["url"], model)
+        if not model or model not in self.model_names:
+            return "Choose a vision model to attach images."
+        if key in self.capability_errors:
+            return "Could not verify image support. Refresh Models and try again."
+        if key not in self.capability_cache:
+            return "Checking image support. Try again shortly."
+        return "This model does not support images. Choose a vision model."
+
+    def require_vision(self, model=None):
+        model = model or self.store.settings.get("model", "")
+        if self.supports_images(model):
+            return True
+        self.ensure_capabilities(model)
+        self.notify(self.image_support_message(model))
+        return False
+
+    def update_image_controls(self):
+        if hasattr(self, "images_button"):
+            enabled = self.supports_images()
+            self.images_button.set_sensitive(enabled and not self.busy and not self.draft_loading)
+            self.images_button.set_tooltip_text("Add Images" if enabled else self.image_support_message())
+
+    def clear_capabilities(self):
+        for job in self.capability_jobs.values():
+            if job["future"]:
+                job["future"].cancel()
+        self.capability_jobs.clear()
+        self.capability_cache.clear()
+        self.capability_errors.clear()
+        self.update_image_controls()
+
     def refresh_models(self):
+        self.clear_capabilities()
         url = self.store.settings["url"]
         generation = getattr(self, "model_generation", 0) + 1
         self.model_generation = generation
@@ -1284,6 +1502,8 @@ class Window(Adw.ApplicationWindow):
                 self.store.settings["model"] = names[self.models.get_selected()]
             self.save_store()
             self.models.set_sensitive(bool(names) and not self.busy and not self.draft_loading)
+            self.ensure_capabilities(self.store.settings.get("model", ""))
+            self.update_image_controls()
             self.request_title(self.current)
             if error:
                 self.notify("Cannot connect to Ollama. Start ‘ollama serve’ and check Preferences.")
@@ -1297,6 +1517,8 @@ class Window(Adw.ApplicationWindow):
         selected = self.models.get_selected_item()
         if selected and selected.get_string() in self.model_names:
             self.store.settings["model"] = selected.get_string()
+            self.update_image_controls()
+            self.ensure_capabilities(selected.get_string())
             self.save_store()
 
     def input_key(self, _, key, __, state):
@@ -1319,6 +1541,8 @@ class Window(Adw.ApplicationWindow):
         if not (formats.contain_gtype(Gdk.Texture) or any(mime.startswith("image/") for mime in formats.get_mime_types())):
             return False
         if self.busy or self.draft_loading:
+            return True
+        if not self.require_vision():
             return True
         if len(self.attachments) >= MAX_ATTACHMENTS:
             self.notify(f"Attach up to {MAX_ATTACHMENTS} files or images per message.")
@@ -1348,7 +1572,7 @@ class Window(Adw.ApplicationWindow):
                 self.set_busy(False)
                 if error:
                     self.notify(error_text(error))
-                elif self.current["id"] == chat_id:
+                elif self.current["id"] == chat_id and self.require_vision():
                     self.attachments.append(item)
                     self.render_attachments()
                 self.input.grab_focus()
@@ -1362,10 +1586,11 @@ class Window(Adw.ApplicationWindow):
         self.send.set_icon_name("media-playback-stop-symbolic" if busy else "go-up-symbolic")
         self.send.set_tooltip_text("Stop Response" if busy else "Send Message")
         self.send.set_sensitive(not self.draft_loading)
-        for widget in (self.input, self.chat_list, self.tool_choices, self.plus, self.attachment_chips):
+        for widget in (self.input, self.chat_list, self.tool_choices, self.plus, self.tools_button, self.attachment_chips):
             widget.set_sensitive(available)
-        self.refresh_tools_button.set_sensitive(available and not self.tools_loading)
+        self.refresh_tools_button.set_sensitive(available and self.store.settings.get("tools_enabled", True) and not self.tools_loading)
         self.models.set_sensitive(available and bool(self.model_names))
+        self.update_image_controls()
         self.update_actions()
 
     def send_or_stop(self, _):
@@ -1381,33 +1606,130 @@ class Window(Adw.ApplicationWindow):
         if not model or model not in self.model_names:
             self.notify("Choose an installed model first.")
             return
+        if (any(item["kind"] == "image" for item in self.attachments) or any(item.get("images") for item in self.current["messages"])) and not self.require_vision(model):
+            return
         self.cancel_titles()
         cfg = copy.deepcopy(self.store.settings)
-        servers = self.servers_for_chat()
         user = user_message(text, self.attachments)
         self.pending_attachments = copy.deepcopy(self.attachments)
-        self.turn_generation += 1
-        generation = self.turn_generation
         self.current["messages"].append(user)
         if not cfg.get("auto_titles", True) and self.current.get("title_source") not in ("manual", "generated"):
             self.current.update(title=clean_title(text or " · ".join(item["name"] for item in self.attachments)), title_source="fallback")
         self.save_store()
         self.input.get_buffer().set_text("")
         self.render_sidebar()
-        self.message_card("user", user.get("display_content", user["content"]), user.get("attachments", []), images=user.get("images", []))
+        self.message_card("user", user.get("display_content", user["content"]), user.get("attachments", []), images=user.get("images", []), file_message=user)
         self.attachments = []
         self.drafts.pop(self.current["id"], None)
         self.render_attachments()
+        self.begin_reply(model)
+
+    def begin_reply(self, model, revision_parent=None):
+        self.reply_model = model
+        self.revision_parent = revision_parent
+        cfg = copy.deepcopy(self.store.settings)
+        servers = self.servers_for_chat()
+        self.turn_generation += 1
+        generation = self.turn_generation
         self.active_label = None
         self.active_tool = None
         self.active_reasoning = None
         self.round_boundary = False
         self.set_busy(True)
         self.show_thinking()
-        history = [{"role": "system", "content": system_instructions(cfg)}] + self.current["messages"]
+        history_messages = [{"role": "system", "content": system_instructions(cfg)}] + self.current["messages"]
         def emit(kind, value):
             GLib.idle_add(self.dispatch_event, generation, kind, value)
-        self.future = self.worker.submit(Ollama(cfg["url"]).chat(model, history, servers, emit), lambda messages, error: self.finished(messages, error, generation))
+        self.future = self.worker.submit(Ollama(cfg["url"]).chat(model, history_messages, servers, emit), lambda messages, error: self.finished(messages, error, generation))
+
+    def add_version_controls(self, row, index):
+        versions = history.choices(self.current, index)
+        if len(versions) < 2:
+            return
+        current = self.current.get("branch_index", 0)
+        if current not in versions:
+            return
+        position = versions.index(current)
+        previous = Gtk.Button(icon_name="go-previous-symbolic", tooltip_text="Previous Version", css_classes=["flat"], sensitive=not self.busy and position > 0)
+        following = Gtk.Button(icon_name="go-next-symbolic", tooltip_text="Next Version", css_classes=["flat"], sensitive=not self.busy and position + 1 < len(versions))
+        previous.connect("clicked", lambda *_: self.select_version(versions[position - 1]))
+        following.connect("clicked", lambda *_: self.select_version(versions[position + 1]))
+        row.append(previous)
+        row.append(Gtk.Label(label=f"{position + 1}/{len(versions)}", tooltip_text="Message Version", css_classes=["dim-label"]))
+        row.append(following)
+
+    def select_version(self, index):
+        if self.busy or self.draft_loading:
+            return
+        history.select(self.current, index)
+        self.save_store()
+        self.render_chat()
+
+    def revision_dialog(self, index, edit=False):
+        if self.busy or self.draft_loading:
+            return
+        chat = self.current
+        message = chat["messages"][index]
+        dialog = Adw.AlertDialog(heading="Edit Message" if edit else "Regenerate Response",
+                                body="Your earlier messages and replies will remain available using the version arrows.")
+        extra = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        editor = None
+        if edit:
+            editor = textview(message.get("display_content", message["content"]))
+            extra.append(preferences_editor(editor, 120, 260))
+            dialog.editor = editor
+        extra.append(Gtk.Label(label="Reply Model", xalign=0, css_classes=["heading"]))
+        picker = ModelPicker(Gtk.StringList.new(self.model_names))
+        original_model = next((item.get("model") for item in chat["messages"][index + 1:] if item["role"] == "assistant" and item.get("model")), self.store.settings.get("model", ""))
+        if original_model in self.model_names:
+            picker.set_selected(self.model_names.index(original_model))
+        extra.append(picker)
+        dialog.model_picker = picker
+        dialog.set_extra_child(extra)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("send", "Send Edit" if edit else "Regenerate")
+        dialog.set_response_appearance("send", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("send")
+        dialog.set_close_response("cancel")
+        has_images = any(item.get("images") for item in chat["messages"][:index + 1])
+        dialog.capabilities_closed = False
+        dialog.connect("closed", lambda *_: setattr(dialog, "capabilities_closed", True))
+        image_notice = Gtk.Label(wrap=True, xalign=0, css_classes=["dim-label"])
+        extra.append(image_notice)
+        def enabled(*_):
+            if dialog.capabilities_closed:
+                return
+            item = picker.get_selected_item()
+            model = item.get_string() if item else ""
+            allowed = not has_images or self.supports_images(model)
+            dialog.set_response_enabled("send", bool(self.model_names) and allowed and (not edit or bool(buffer_text(editor).strip())))
+            image_notice.set_visible(has_images and not allowed)
+            if has_images and not allowed:
+                image_notice.set_label(self.image_support_message(model))
+                self.ensure_capabilities(model, enabled)
+        picker.connect("notify::selected", enabled)
+        if editor:
+            editor.get_buffer().connect("changed", enabled)
+        enabled()
+        def response(_, value):
+            if value != "send" or self.busy or self.draft_loading or self.current is not chat:
+                return
+            item = picker.get_selected_item()
+            if item is None or item.get_string() not in self.model_names:
+                return
+            model = item.get_string()
+            if has_images and not self.require_vision(model):
+                return
+            replacement = history.edited_message(message, buffer_text(editor).strip()) if edit else None
+            parent = history.fork(chat, index, replacement, model)
+            self.cancel_titles(chat["id"])
+            self.pending_attachments = []
+            self.save_store()
+            self.render_chat()
+            self.begin_reply(model, revision_parent=parent)
+        dialog.connect("response", response)
+        dialog.present(self)
+        return dialog
 
     def dispatch_event(self, generation, kind, value):
         if not self.closed and generation == self.turn_generation and self.busy:
@@ -1453,6 +1775,16 @@ class Window(Adw.ApplicationWindow):
         self.set_busy(False)
         if error:
             cancelled = isinstance(error, (asyncio.CancelledError, concurrent.futures.CancelledError))
+            if self.revision_parent is not None:
+                self.current["branches"][self.current["branch_index"]]["status"] = "failed"
+                history.select(self.current, self.revision_parent)
+                self.revision_parent = None
+                self.render_chat()
+                self.notify("Regeneration stopped. Previous version restored." if cancelled else f"Request failed: {error_text(error)}")
+                self.save_store()
+                self.update_actions()
+                self.pending_attachments = []
+                return
             # Remove the pending user turn, allowing a clean retry.
             message = self.current["messages"].pop()
             text = message.get("display_content", message["content"])
@@ -1466,11 +1798,15 @@ class Window(Adw.ApplicationWindow):
                 self.render_sidebar()
         else:
             expansion = set(self.active_label.expanded_codes) if self.active_label else ()
+            for message in messages:
+                if message["role"] == "assistant":
+                    message["model"] = self.reply_model
             self.current["messages"].extend(messages)
             self.render_chat(final_code_expansion=expansion)
             self.get_application().notify_completion(self.current)
             self.request_title(self.current)
         self.pending_attachments = []
+        self.revision_parent = None
         self.save_store()
         self.update_actions()
         self.input.grab_focus()
@@ -1507,18 +1843,21 @@ class Window(Adw.ApplicationWindow):
 
     def on_close(self, *_):
         self.closed = True
+        self.lantern_paintable.close()
+        self.clear_capabilities()
         if self.scroll_pending is not None:
             GLib.source_remove(self.scroll_pending)
             self.scroll_pending = None
         self.cancel_titles()
         self.worker.close()
-        self.save_store()
+        if self.setup is None:
+            self.save_store()
         return False
 
 
 class Application(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="io.github.ollamagnome.Lumen", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         open_chat = Gio.SimpleAction.new("open-chat", GLib.VariantType.new("s"))
         open_chat.connect("activate", self.open_chat)
         self.add_action(open_chat)

@@ -143,6 +143,7 @@ with tempfile.TemporaryDirectory() as directory, patch.object(Window, "refresh_m
         assert preferences.latex_enabled.get_active()
         preferences.latex_enabled.set_active(False)
         preferences.save(None)
+        preferences.close()
         assert not Store(directory).settings["latex_enabled"]
         assert not any(isinstance(item, Equation) for item in descendants(window.messages))
         preferences = Preferences(window)
@@ -150,6 +151,7 @@ with tempfile.TemporaryDirectory() as directory, patch.object(Window, "refresh_m
         assert not preferences.latex_enabled.get_active()
         preferences.latex_enabled.set_active(True)
         preferences.save(None)
+        preferences.close()
         assert any(isinstance(item, Equation) for item in descendants(window.messages))
         window.preferences = Preferences(window)
         window.preferences.present(window)

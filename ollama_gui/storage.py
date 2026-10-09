@@ -14,6 +14,7 @@ DEFAULT_SETTINGS = {
     "custom_system_enabled": False,
     "custom_mcp_enabled": False,
     "mcpServers": {},
+    "tools_enabled": True,
     "python_enabled": True,
     "auto_titles": True,
     "show_thinking": False,
@@ -32,6 +33,8 @@ def brave_enabled(settings):
 
 
 def tool_servers(settings):
+    if not settings.get("tools_enabled", True):
+        return {}
     servers = copy.deepcopy(settings["mcpServers"])
     if not brave_enabled(settings):
         servers.pop("brave-search", None)
@@ -103,6 +106,12 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.settings = self.read("settings.json", copy.deepcopy(DEFAULT_SETTINGS))
         self.chats = self.read("chats.json", [])
+
+    @property
+    def needs_setup(self):
+        # Settings or history from earlier versions count as an existing setup.
+        # An explicit incomplete marker still takes precedence.
+        return not self.settings.get("setup_completed", (self.root / "settings.json").exists() or bool(self.chats))
 
     def read(self, name, default):
         path = self.root / name

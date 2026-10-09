@@ -66,6 +66,7 @@ def load_attachment(path, kind):
         data = source.read(limit + 1)
     if len(data) > limit:
         raise ValueError(f"{path.name}: maximum size is {limit // (1024 * 1024)} MB.")
+    pdf = is_pdf or data.startswith(b"%PDF-")
     if kind == "image":
         return image_attachment(data, path.name)
     elif is_pdf or data.startswith(b"%PDF-"):
@@ -77,7 +78,10 @@ def load_attachment(path, kind):
             raise ValueError(f"{path.name}: choose a PDF or a UTF-8 text file (such as TXT, Markdown, code or CSV).") from None
         if "\x00" in content:
             raise ValueError(f"{path.name}: this appears to be a binary file. Choose a text file.")
-    return {"name": path.name, "kind": kind, "content": content}
+    result = {"name": path.name, "kind": kind, "content": content}
+    if pdf:
+        result.update(mime="application/pdf", data=base64.b64encode(data).decode("ascii"))
+    return result
 
 
 def user_message(text, attachments):
@@ -89,7 +93,7 @@ def user_message(text, attachments):
     message = {"role": "user", "content": content}
     if attachments:
         message["display_content"] = prompt
-        message["attachments"] = [{k: a[k] for k in ("name", "kind", "thumbnail") if k in a} for a in attachments]
+        message["attachments"] = [{k: a[k] for k in (("name", "kind", "thumbnail") if a["kind"] == "image" else ("name", "kind", "content", "mime", "data")) if k in a} for a in attachments]
     images = [a["content"] for a in attachments if a["kind"] == "image"]
     if images:
         message["images"] = images

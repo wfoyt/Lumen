@@ -5,6 +5,7 @@ from PIL import Image
 import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk
+from .attachment_view import PreviewButton
 
 
 def image_thumbnails():
@@ -50,9 +51,7 @@ def image_preview(attachment, encoded=None, draft=False):
                             css_classes=["image-thumbnail"], halign=Gtk.Align.START)
     frame.set_overflow(Gtk.Overflow.HIDDEN)
     frame.set_child(picture)
-    if draft:
-        return frame
-    button = Gtk.Button(css_classes=["flat", "sent-image"], halign=Gtk.Align.START)
+    button = PreviewButton(css_classes=["flat", "sent-image"], halign=Gtk.Align.START)
     button.set_child(frame)
     def show(_):
         dialog = Adw.Dialog(title=attachment["name"], content_width=800, content_height=600)

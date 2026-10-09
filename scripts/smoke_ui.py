@@ -1,6 +1,7 @@
 """Run on a graphical session; uses temporary application data."""
 import sys
 import json
+import copy
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import tempfile
@@ -27,18 +28,22 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
     notifications = []
     app.send_notification = lambda identifier, notification: notifications.append((identifier, notification))
     app.withdraw_notification = lambda *_: None
-    window = Window(app, Store(root))
+    store = Store(root)
+    store.settings["setup_completed"] = True
+    window = Window(app, store)
     window.present()
     prefs = Preferences(window)
     prefs.present(window)
     loop = GLib.MainLoop()
     def finish():
         prefs.close()
-        assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon("ollama-chat-symbolic")
-        assert window.empty.get_icon_name() == "ollama-chat-symbolic"
+        assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon("lumen-symbolic")
+        assert window.empty.get_paintable() is window.lantern_paintable
+        assert window.get_icon_name() == "io.github.ollamagnome.Lumen"
+        assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon("io.github.ollamagnome.Lumen")
         assert window.send.get_icon_name() == "go-up-symbolic"
         assert window.plus.get_popover() is window.plus_menu
-        assert window.plus.get_next_sibling() is window.model_clamp
+        assert window.plus.get_next_sibling() is window.tools_button
         assert window.model_clamp.get_child() is window.models
         assert window.model_clamp.get_maximum_size() == 240
         assert window.app_menu.get_parent() is window.sidebar_controls
@@ -57,8 +62,8 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert prefs.url.is_ancestor(prefs.advanced_page)
         assert not prefs.url.is_ancestor(prefs.general_page)
         assert prefs.show_thinking.is_ancestor(prefs.general_page)
-        assert prefs.friendly_search.is_ancestor(prefs.general_page)
-        assert prefs.friendly_python.is_ancestor(prefs.general_page)
+        assert prefs.friendly_search.is_ancestor(prefs.tools_page)
+        assert prefs.friendly_python.is_ancestor(prefs.tools_page)
         assert prefs.latex_enabled.is_ancestor(prefs.advanced_page)
         assert prefs.latex_enabled.get_active()
         assert not prefs.brave_enabled.get_active()
@@ -66,6 +71,14 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         prefs.brave_enabled.set_active(True)
         assert prefs.brave_revealer.get_visible()
         prefs.brave_enabled.set_active(False)
+        assert prefs.tools_enabled.get_active()
+        assert prefs.tools_enabled.is_ancestor(prefs.tools_page)
+        assert prefs.python_enabled.is_ancestor(prefs.tools_page)
+        assert prefs.brave_group.is_ancestor(prefs.tools_page)
+        prefs.tools_enabled.set_active(False)
+        assert not prefs.tools_revealer.get_visible()
+        prefs.tools_enabled.set_active(True)
+        assert prefs.tools_revealer.get_visible()
         assert prefs.brave_group.is_ancestor(prefs.tools_group)
         assert prefs.python_enabled.get_parent() is not prefs.key.get_parent()
         assert not prefs.advanced_test.get_visible()
@@ -76,10 +89,11 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert not prefs.custom_mcp.get_active()
         assert not prefs.system.get_editable() and not prefs.servers.get_editable()
         assert not prefs.system_revealer.get_visible() and not prefs.servers_revealer.get_visible()
-        assert not window.tools_expander.get_expanded()
-        assert window.tools_expander.get_label() == "Tools"
-        window.tools_expander.set_expanded(True)
-        assert window.tool_choices.get_parent().get_parent() is window.tools_expander.get_child().get_first_child()
+        assert window.tools_button.get_tooltip_text() == "Tools"
+        assert window.tools_button.get_popover() is window.tools_menu
+        assert window.plus.get_next_sibling() is window.tools_button
+        assert window.tools_button.get_next_sibling() is window.model_clamp
+        assert window.tool_choices.get_parent().get_parent() is window.tools_menu.get_child().get_first_child()
         window.open_search()
         assert window.search_button.get_active()
         window.search_entry.set_text("no such chat")
@@ -292,6 +306,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
             def cancel(self): self.cancelled = True
         class TitleWorker:
             jobs = []
+            def close(self): pass
             def submit(self, coroutine, callback):
                 coroutine.close()
                 future = Future()
@@ -314,12 +329,15 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         callback, future = fake_worker.jobs[-1]
         display_preferences = Preferences(window)
         display_preferences.present(window)
+        saved_servers = copy.deepcopy(window.store.settings["mcpServers"])
+        display_preferences.tools_enabled.set_active(False)
         display_preferences.auto_titles.set_active(False)
         display_preferences.show_thinking.set_active(True)
         display_preferences.friendly_search.set_active(False)
         display_preferences.friendly_python.set_active(False)
         display_preferences.latex_enabled.set_active(False)
         display_preferences.save(None)
+        display_preferences.close()
         assert future.cancelled and not window.title_jobs
         callback("Disabled Automatic Title", None)
         assert window.current["title"] == "Python Calculation"
@@ -335,12 +353,19 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert not display_preferences.latex_enabled.get_active()
         assert not Store(root).settings["latex_enabled"]
         assert not Store(root).settings["auto_titles"]
+        assert not display_preferences.tools_enabled.get_active()
+        assert not display_preferences.tools_revealer.get_visible()
+        assert not Store(root).settings["tools_enabled"]
+        assert window.servers_for_chat() == {}
+        assert window.store.settings["mcpServers"] == saved_servers
+        display_preferences.tools_enabled.set_active(True)
         display_preferences.auto_titles.set_active(True)
         display_preferences.show_thinking.set_active(False)
         display_preferences.friendly_search.set_active(True)
         display_preferences.friendly_python.set_active(True)
         display_preferences.latex_enabled.set_active(True)
         display_preferences.save(None)
+        display_preferences.close()
         window.cancel_titles()
         window.current["title_source"] = "pending"
         window.request_title(window.current)
@@ -377,6 +402,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert custom_preferences.system_revealer.get_visible() and custom_preferences.servers_revealer.get_visible()
         custom_preferences.system.get_buffer().set_text("Answer in Spanish.")
         custom_preferences.save(None)
+        custom_preferences.close()
         custom_preferences = Preferences(window)
         custom_preferences.present(window)
         assert custom_preferences.custom_system.get_active() and custom_preferences.custom_mcp.get_active()
@@ -386,6 +412,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert not custom_preferences.advanced_test.get_visible()
         custom_preferences.servers.get_buffer().set_text("invalid hidden JSON")
         custom_preferences.save(None)
+        custom_preferences.close()
         assert not Store(root).settings["custom_system_enabled"]
         assert not Store(root).settings["custom_mcp_enabled"]
         assert "test-server" in Store(root).settings["mcpServers"]
@@ -395,12 +422,13 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         key_preferences.key.set_text("test-only-key")
         key_preferences.brave_enabled.set_active(True)
         key_preferences.python_enabled.set_active(False)
-        assert key_preferences.brave_setup.has_css_class("suggested-action")
+        assert not key_preferences.brave_setup.has_css_class("suggested-action")
         key_preferences.add_brave(None)
         assert Store(root).settings["mcpServers"]["brave-search"]["env"]["BRAVE_API_KEY"] == "test-only-key"
         assert not key_preferences.brave_setup.has_css_class("suggested-action")
         assert Store(root).settings["brave_enabled"]
         key_preferences.save(None)
+        key_preferences.close()
         assert not Store(root).settings["python_enabled"]
         assert PYTHON_SERVER_NAME not in window.servers_for_chat()
         saved = Store(root).settings["mcpServers"]["brave-search"]
@@ -413,6 +441,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         reopened.brave_enabled.set_active(False)
         assert not reopened.brave_revealer.get_visible()
         reopened.save(None)
+        reopened.close()
         assert not Store(root).settings["brave_enabled"]
         assert "brave-search" not in window.servers_for_chat()
         reopened = Preferences(window)
@@ -423,6 +452,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         reopened.python_enabled.set_active(True)
         reopened.key.set_text("replacement-test-key")
         reopened.save(None)
+        reopened.close()
         assert Store(root).settings["mcpServers"]["brave-search"]["env"]["BRAVE_API_KEY"] == "replacement-test-key"
         assert Store(root).settings["python_enabled"]
         reset_preferences = Preferences(window)
@@ -630,11 +660,14 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         window.models.popdown()
         image = BytesIO()
         Image.new("RGB", (400, 300), "royalblue").save(image, format="PNG")
+        window.capability_cache[(window.store.settings["url"], window.store.settings.get("model", ""))] = {"vision"}
+        window.update_image_controls()
         window.test_image = image_attachment(image.getvalue())
         window.attachments = [window.test_image]
         window.render_attachments()
         chip = window.attachment_chips.get_child_at_index(0).get_child()
-        assert isinstance(chip.get_first_child(), Gtk.AspectFrame)
+        assert isinstance(chip.get_first_child(), Gtk.Button)
+        assert isinstance(chip.get_first_child().get_child(), Gtk.AspectFrame)
         message = user_message("An image", window.attachments)
         label = window.message_card("user", "An image", message["attachments"], images=message["images"])
         bubble = label.get_parent().get_parent()

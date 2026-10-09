@@ -11,7 +11,9 @@ with tempfile.TemporaryDirectory() as directory, patch.object(Window, 'refresh_m
     app = Application()
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
     app.register(None)
-    window = Window(app, Store(directory))
+    store = Store(directory)
+    store.settings["setup_completed"] = True
+    window = Window(app, store)
     window.set_default_size(1080, 800)
     window.present()
     loop = GLib.MainLoop()

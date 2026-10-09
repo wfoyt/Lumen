@@ -16,4 +16,4 @@ lumen = "ollama_gui.app:main"
 include = ["ollama_gui*"]
 
 [tool.setuptools.package-data]
-ollama_gui = ["icons/hicolor/scalable/apps/*.svg"]
+ollama_gui = ["icons/*.png", "icons/hicolor/scalable/apps/*.svg"]

@@ -32,14 +32,17 @@ async def execute_python(code: str, filename: str = "main.py", timeout_seconds: 
         raise ValueError("Use a simple Python filename, such as calculation.py.")
     if not 1 <= timeout_seconds <= 30:
         raise ValueError("Use a timeout between 1 and 30 seconds.")
-    bwrap = shutil.which("bwrap")
-    if not bwrap:
+    flatpak = Path("/.flatpak-info").exists()
+    launcher = shutil.which("flatpak-spawn" if flatpak else "bwrap")
+    if not launcher:
+        if flatpak:
+            raise RuntimeError("Python execution needs the Flatpak sandbox portal (flatpak-spawn).")
         raise RuntimeError("Python execution needs bubblewrap. Install it with: sudo dnf install bubblewrap")
     with tempfile.TemporaryDirectory(prefix="ollama-python-") as directory:
         work = Path(directory)
         (work / filename).write_text(code, encoding="utf-8")
         (work / "_runner.py").write_text(RUNNER, encoding="utf-8")
-        command = [bwrap, "--unshare-all", "--die-with-parent", "--new-session",
+        command = [launcher, "--unshare-all", "--die-with-parent", "--new-session",
                    "--ro-bind", "/usr", "/usr", "--proc", "/proc", "--dev", "/dev",
                    "--tmpfs", "/tmp", "--bind", directory, "/work", "--chdir", "/work",
                    "--clearenv", "--setenv", "PATH", "/usr/bin", "--setenv", "HOME", "/tmp",
@@ -47,10 +50,25 @@ async def execute_python(code: str, filename: str = "main.py", timeout_seconds: 
         for path in ("/lib", "/lib64"):
             if Path(path).exists():
                 command.extend(["--ro-bind", path, path])
-        command.extend(["/usr/bin/python3", "-I", "/work/_runner.py", f"/work/{filename}"])
-        process = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.DEVNULL,
+        command.extend(["/usr/bin/python3", "-I", "-S", "/work/_runner.py", f"/work/{filename}"])
+        # Flatpak blocks creating nested user namespaces. Ask its portal for a
+        # fresh, stricter sandbox instead, forwarding only the script descriptor.
+        # No host-spawn permission, app data or document grants are passed on.
+        script_fd = None
+        if flatpak:
+            script_fd = os.open(work / filename, os.O_RDONLY)
+            command = [launcher, "--sandbox", "--no-network", "--watch-bus", "--clear-env",
+                       "--env=HOME=/tmp", "--env=PATH=/usr/bin", "--env=PYTHONIOENCODING=utf-8",
+                       "--directory=/tmp", f"--forward-fd={script_fd}",
+                       "/usr/bin/python3", "-I", "-S", "-c", RUNNER, f"/proc/self/fd/{script_fd}"]
+        try:
+            process = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.DEVNULL,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                                                       start_new_session=True)
+                                                       start_new_session=True,
+                                                       pass_fds=() if script_fd is None else (script_fd,))
+        finally:
+            if script_fd is not None:
+                os.close(script_fd)
         buffers = [bytearray(), bytearray()]
         output_limited = False
         def kill():

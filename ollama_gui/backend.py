@@ -88,6 +88,18 @@ class Ollama:
             response.raise_for_status()
             return [m["name"] for m in response.json().get("models", [])]
 
+    async def model_capabilities(self, model):
+        async with asyncio.timeout(30), self.client() as client:
+            response = await client.post("/api/show", json={"model": model})
+            response.raise_for_status()
+            data = response.json()
+            if data.get("error"):
+                raise RuntimeError(data["error"])
+            capabilities = data.get("capabilities", [])
+            if not isinstance(capabilities, list) or not all(isinstance(value, str) for value in capabilities):
+                raise ValueError("Ollama returned invalid model capabilities.")
+            return set(capabilities)
+
     async def title(self, model, messages):
         context = title_context(messages)
         if len(context) != 2:
