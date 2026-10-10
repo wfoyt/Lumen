@@ -13,7 +13,7 @@ Download Lumen from **[GitHub Releases](https://github.com/wfoyt/Lumen/releases/
 3. Open a terminal in your Downloads folder and install it (use the name of the file you downloaded):
 
 ```bash
-flatpak install --user ./Lumen-0.1.0-x86_64.flatpak
+flatpak install --user ./Lumen-0.1.1-x86_64.flatpak
 ```
 
 Then open **Lumen** from your application menu. To update, download the latest release and install its bundle the same way.

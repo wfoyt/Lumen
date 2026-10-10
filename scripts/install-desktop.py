@@ -10,9 +10,12 @@ target = data / "applications/io.github.ollamagnome.Lumen.desktop"
 target.parent.mkdir(parents=True, exist_ok=True)
 # Register the icon under the application ID so GNOME can also resolve it
 # for running windows, notifications and the overview.
-icon_dir = data / "icons/hicolor/256x256/apps"
+icon_dir = data / "icons/hicolor/scalable/apps"
 icon_dir.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(project / "ollama_gui/icons/lumen.png", icon_dir / "io.github.ollamagnome.Lumen.png")
+shutil.copyfile(project / "ollama_gui/icons/io.github.ollamagnome.Lumen.svg", icon_dir / "io.github.ollamagnome.Lumen.svg")
+shutil.copyfile(project / "ollama_gui/icons/hicolor/scalable/apps/lumen-symbolic.svg", icon_dir / "io.github.ollamagnome.Lumen-symbolic.svg")
+legacy_icon = data / "icons/hicolor/256x256/apps/io.github.ollamagnome.Lumen.png"
+legacy_icon.unlink(missing_ok=True)
 def quote(value):
     return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$') + '"'
 target.write_text("\n".join([

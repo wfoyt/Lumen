@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.ollamagnome.Lumen</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Lumen</name>
+  <summary>Chat with Ollama models and MCP tools</summary>
+  <url type="homepage">https://github.com/wfoyt/Lumen</url>
+  <url type="bugtracker">https://github.com/wfoyt/Lumen/issues</url>
+  <description>
+    <p>Lumen is a native GNOME chat application for Ollama. Connect to a local
+    or remote Ollama server, stream responses, and keep conversations on your computer.</p>
+    <p>Attach images, text files and PDFs, render Markdown and equations, and
+    connect tools through the Model Context Protocol. Built-in tools provide
+    isolated Python calculations and optional Brave Search.</p>
+    <p>Ollama and models are installed separately. Brave Search requires your own API key.</p>
+  </description>
+  <launchable type="desktop-id">io.github.ollamagnome.Lumen.desktop</launchable>
+  <provides><binary>lumen</binary></provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.1" date="2026-10-10">
+      <description><p>New scalable vector lantern icons throughout Lumen, including a theme-aware monochrome lantern and a full-color desktop icon.</p></description>
+    </release>
+    <release version="0.1.0" date="2026-10-09"/>
+  </releases>
+</component>

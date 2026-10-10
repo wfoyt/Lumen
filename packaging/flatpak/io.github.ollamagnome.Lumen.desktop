@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Lumen
+Comment=Chat with local models and MCP tools
+Exec=lumen
+Icon=io.github.ollamagnome.Lumen
+Terminal=false
+Categories=Network;Chat;
+Keywords=Ollama;AI;Chat;MCP;
+StartupNotify=true
+StartupWMClass=io.github.ollamagnome.Lumen
+X-GNOME-UsesNotifications=true

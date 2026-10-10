@@ -1,0 +1,105 @@
+{
+  "app-id": "io.github.ollamagnome.Lumen",
+  "branch": "stable",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "command": "lumen",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri"
+  ],
+  "cleanup": [
+    "/include",
+    "/lib/pkgconfig",
+    "/share/pkgconfig",
+    "/share/gir-1.0",
+    "/share/man",
+    "*.a",
+    "*.la"
+  ],
+  "modules": [
+    {
+      "name": "popplerdata",
+      "buildsystem": "cmake-ninja",
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://poppler.freedesktop.org/poppler-data-0.4.12.tar.gz",
+          "sha256": "c835b640a40ce357e1b83666aabd95edffa24ddddd49b8daff63adb851cdab74",
+          "x-checker-data": {
+            "type": "anitya",
+            "project-id": 3687,
+            "url-template": "https://poppler.freedesktop.org/poppler-data-$version.tar.gz"
+          }
+        }
+      ]
+    },
+    {
+      "name": "poppler",
+      "buildsystem": "cmake-ninja",
+      "config-opts": [
+        "-DBUILD_GTK_TESTS=OFF",
+        "-DBUILD_CPP_TESTS=OFF",
+        "-DENABLE_CPP=OFF",
+        "-DENABLE_BOOST=OFF",
+        "-DENABLE_LIBOPENJPEG=openjpeg2",
+        "-DENABLE_QT5=OFF",
+        "-DENABLE_QT6=OFF",
+        "-DENABLE_GOBJECT_INTROSPECTION=ON",
+        "-DENABLE_UTILS=OFF",
+        "-DENABLE_GLIB=ON",
+        "-DBUILD_MANUAL_TESTS=OFF",
+        "-DENABLE_GPGME=OFF"
+      ],
+      "cleanup": [
+        "/bin"
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://poppler.freedesktop.org/poppler-26.08.0.tar.xz",
+          "sha256": "dc906e68cea698109706ac6aa3d2c9d4512fcfcac42d90b8afcda486d1b9abd0",
+          "x-checker-data": {
+            "type": "anitya",
+            "project-id": 3686,
+            "url-template": "https://poppler.freedesktop.org/poppler-$version.tar.xz"
+          }
+        }
+      ]
+    },
+    "python-dependencies.json",
+    {
+      "name": "lumen",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --no-deps --no-build-isolation --no-index --prefix=/app .",
+        "install -Dm644 packaging/flatpak/io.github.ollamagnome.Lumen.desktop /app/share/applications/io.github.ollamagnome.Lumen.desktop",
+        "install -Dm644 packaging/flatpak/io.github.ollamagnome.Lumen.metainfo.xml /app/share/metainfo/io.github.ollamagnome.Lumen.metainfo.xml",
+        "install -Dm644 ollama_gui/icons/io.github.ollamagnome.Lumen.svg /app/share/icons/hicolor/scalable/apps/io.github.ollamagnome.Lumen.svg",
+        "install -Dm644 ollama_gui/icons/hicolor/scalable/apps/lumen-symbolic.svg /app/share/icons/hicolor/scalable/apps/io.github.ollamagnome.Lumen-symbolic.svg"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../..",
+          "skip": [
+            ".git",
+            ".venv",
+            ".agents",
+            ".aws",
+            ".codex",
+            ".flatpak-builder",
+            "build",
+            "dist",
+            "__pycache__",
+            "*.egg-info"
+          ]
+        }
+      ]
+    }
+  ]
+}

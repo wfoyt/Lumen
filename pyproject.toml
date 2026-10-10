@@ -19,4 +19,4 @@ include = ["ollama_gui*"]
 version = {attr = "ollama_gui.__version__"}
 
 [tool.setuptools.package-data]
-ollama_gui = ["icons/*.png", "icons/hicolor/scalable/apps/*.svg"]
+ollama_gui = ["icons/*.svg", "icons/hicolor/scalable/apps/*.svg"]
