@@ -1,121 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1280" viewBox="0 0 1280 1280" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Glowing lantern chat icon</title>
-  <desc id="desc">An original vector illustration of a glossy blue lantern with a golden flame and a speech bubble shaped base. All artwork consists of scalable paths and gradients on a transparent background.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lumen</title>
+  <desc id="desc">A warm ivory lightbulb inside a blue speech bubble. A little light for your conversations.</desc>
   <defs>
-    <linearGradient id="handle" x1="625" y1="57" x2="625" y2="263" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#31d7fb"/><stop offset=".16" stop-color="#288ed0"/><stop offset=".52" stop-color="#1e63a5"/><stop offset="1" stop-color="#103866"/>
+    <linearGradient id="bubble" x1="14" y1="58" x2="114" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3584e4"/>
+      <stop offset="0.5" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#3584e4"/>
     </linearGradient>
-    <linearGradient id="handleEdge" x1="625" y1="60" x2="625" y2="251" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5ae9ff"/><stop offset=".37" stop-color="#1685c5"/><stop offset="1" stop-color="#052d59"/>
+    <linearGradient id="bulb" x1="46" y1="52" x2="82" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f9f06b"/>
+      <stop offset="0.5" stop-color="#fffbe6"/>
+      <stop offset="1" stop-color="#f9f06b"/>
     </linearGradient>
-    <linearGradient id="body" x1="252" y1="576" x2="955" y2="1068" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1375b1"/><stop offset=".2" stop-color="#145a8e"/><stop offset=".48" stop-color="#154e7f"/><stop offset=".76" stop-color="#174779"/><stop offset="1" stop-color="#082b54"/>
-    </linearGradient>
-    <radialGradient id="bodyLight" cx="650" cy="689" r="530" gradientTransform="translate(0 -82) scale(1 1.12)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#54c2db" stop-opacity=".75"/><stop offset=".55" stop-color="#2f81b6" stop-opacity=".2"/><stop offset="1" stop-color="#071f4a" stop-opacity=".65"/>
-    </radialGradient>
-    <linearGradient id="rim" x1="628" y1="524" x2="628" y2="972" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#12446e"/><stop offset=".3" stop-color="#268ab5"/><stop offset=".74" stop-color="#449dbb"/><stop offset="1" stop-color="#a0e0de"/>
-    </linearGradient>
-    <linearGradient id="glass" x1="285" y1="591" x2="978" y2="825" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#e3e5dc"/><stop offset=".16" stop-color="#f6bf75"/><stop offset=".46" stop-color="#ffce65"/><stop offset=".75" stop-color="#ffd384"/><stop offset="1" stop-color="#c5d9d7"/>
-    </linearGradient>
-    <radialGradient id="warmth" cx="626" cy="769" r="371" gradientTransform="translate(0 -154) scale(1 1.2)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ffffc4"/><stop offset=".3" stop-color="#ffe77d"/><stop offset=".59" stop-color="#ffbd45" stop-opacity=".82"/><stop offset="1" stop-color="#ffad50" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="reflection" x1="310" y1="613" x2="388" y2="831" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fffdf4" stop-opacity=".55"/><stop offset="1" stop-color="#fff2d4" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="floor" x1="625" y1="828" x2="625" y2="959" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ffc85d"/><stop offset=".42" stop-color="#eaa174"/><stop offset="1" stop-color="#b87b69"/>
-    </linearGradient>
-    <linearGradient id="bar" x1="390" y1="696" x2="435" y2="698" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#123653"/><stop offset=".38" stop-color="#2b4662"/><stop offset=".72" stop-color="#485064"/><stop offset="1" stop-color="#82654e"/>
-    </linearGradient>
-    <linearGradient id="barRight" x1="819" y1="694" x2="865" y2="695" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8b6446"/><stop offset=".2" stop-color="#4c4f5e"/><stop offset=".64" stop-color="#2b425e"/><stop offset="1" stop-color="#153550"/>
-    </linearGradient>
-    <linearGradient id="burner" x1="626" y1="864" x2="626" y2="958" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5b7389"/><stop offset=".27" stop-color="#3c5574"/><stop offset="1" stop-color="#1e3c60"/>
-    </linearGradient>
-    <radialGradient id="burnerGlow" cx="626" cy="877" r="237" gradientTransform="translate(0 526) scale(1 .4)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ffc481" stop-opacity=".8"/><stop offset="1" stop-color="#ffc481" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="flame" cx="620" cy="846" r="284" gradientTransform="translate(0 -169) scale(1 1.2)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fffff3"/><stop offset=".45" stop-color="#ffffcf"/><stop offset="1" stop-color="#fff49a"/>
-    </radialGradient>
-    <linearGradient id="roof" x1="427" y1="287" x2="717" y2="521" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#25b8e8"/><stop offset=".38" stop-color="#2f92c5"/><stop offset=".73" stop-color="#50c4e6"/><stop offset="1" stop-color="#4bcdec"/>
-    </linearGradient>
-    <radialGradient id="roofShine" cx="826" cy="314" r="530" gradientTransform="translate(0 125) scale(1 .6)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7df6ff" stop-opacity=".85"/><stop offset="1" stop-color="#34a6cf" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="roofLip" x1="625" y1="447" x2="625" y2="535" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#197fa6"/><stop offset=".46" stop-color="#165978"/><stop offset="1" stop-color="#123e58"/>
-    </linearGradient>
-    <radialGradient id="lipLight" cx="639" cy="501" r="385" gradientTransform="translate(0 300) scale(1 .4)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8bc1bf" stop-opacity=".46"/><stop offset="1" stop-color="#7cc4c6" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="capTop" x1="568" y1="197" x2="638" y2="265" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1d8fc9"/><stop offset=".5" stop-color="#41c8ef"/><stop offset="1" stop-color="#66ecfa"/>
-    </linearGradient>
-    <linearGradient id="cap" x1="411" y1="280" x2="849" y2="285" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1c689b"/><stop offset=".14" stop-color="#123b66"/><stop offset=".61" stop-color="#2d73b4"/><stop offset="1" stop-color="#144774"/>
-    </linearGradient>
-    <linearGradient id="capEdge" x1="628" y1="248" x2="628" y2="324" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5cceee"/><stop offset=".17" stop-color="#2889bb"/><stop offset="1" stop-color="#062d4b"/>
-    </linearGradient>
-    <path id="bodyShape" d="M272 494 C216 551 191 623 191 718 L191 808 C191 948 226 1016 301 1044 C328 1054 360 1055 383 1066 C410 1080 399 1115 393 1138 C387 1159 398 1177 417 1176 C455 1173 514 1114 566 1088 C600 1070 619 1070 657 1071 L812 1070 C921 1069 987 1044 1027 983 C1054 939 1065 886 1064 809 L1063 718 C1062 618 1033 551 986 497 Z"/>
-    <path id="windowShape" d="M397 535 C329 535 284 581 275 657 C270 699 269 773 274 814 C280 891 315 923 393 942 C514 967 746 968 865 947 C943 934 976 899 981 821 C986 778 986 701 979 660 C966 578 922 535 857 535 Z"/>
-    <clipPath id="windowClip"><use href="#windowShape"/></clipPath>
-    <clipPath id="bodyClip"><use href="#bodyShape"/></clipPath>
   </defs>
-
-  <!-- Carrying loop: a single hollow, closed vector path. -->
-  <path d="M434 249 C432 145 512 57 620 55 C730 51 815 134 819 245 L746 245 C746 176 695 123 628 123 C558 122 506 177 508 245 Z" fill="url(#handle)" stroke="url(#handleEdge)" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M497 225 C502 155 554 110 623 109 C693 107 749 156 755 226" stroke="#062f5a" stroke-opacity=".7" stroke-width="8"/>
-  <path d="M445 204 C465 120 534 64 620 63 C714 60 788 125 807 206" stroke="#5ce4ff" stroke-opacity=".25" stroke-width="5" stroke-linecap="round"/>
-
-  <!-- Outer body and speech bubble tail. -->
-  <use href="#bodyShape" fill="url(#body)" stroke="#063866" stroke-width="7"/>
-  <use href="#bodyShape" fill="url(#bodyLight)"/>
-  <path d="M258 556 C210 627 204 682 204 793 C204 943 237 1017 328 1041 C362 1050 393 1050 404 1074 C420 1104 397 1142 402 1157 C410 1186 473 1133 528 1099 C595 1056 603 1063 714 1063" stroke="#1d73a7" stroke-opacity=".25" stroke-width="9" stroke-linecap="round" clip-path="url(#bodyClip)"/>
-
-  <!-- Thick cyan rim around the amber glass. -->
-  <path d="M355 518 C282 530 247 600 244 684 C241 729 240 796 245 834 C254 920 297 950 390 965 C516 984 749 983 870 966 C969 951 1003 908 1009 828 C1014 775 1010 700 1006 667 C997 595 968 542 909 518 Z" fill="url(#rim)"/>
-  <use href="#windowShape" fill="url(#glass)" stroke="#ffc564" stroke-width="2.5"/>
-  <g clip-path="url(#windowClip)">
-    <use href="#windowShape" fill="url(#warmth)"/>
-    <path d="M275 888 C309 805 932 805 981 887 L992 975 L262 975 Z" fill="url(#floor)"/>
-    <path d="M286 878 C382 809 869 809 969 878" stroke="#ffda91" stroke-opacity=".55" stroke-width="6"/>
-    <path d="M289 829 C287 713 289 613 331 577 C349 563 370 558 383 570 C352 620 332 706 335 787 Z" fill="url(#reflection)"/>
-    <path d="M708 566 C763 554 800 564 825 585 L823 705 C796 648 758 603 708 566 Z" fill="#fff8da" opacity=".21"/>
-    <path d="M859 582 C883 553 907 571 922 603 C940 642 940 697 934 747 C919 690 894 652 859 627 Z" fill="url(#reflection)"/>
-
-    <!-- Back supports and the raised burner. -->
-    <path d="M392 529 L433 531 L435 858 Q416 871 390 860 Z" fill="url(#bar)"/>
-    <path d="M820 531 L864 529 L865 861 Q839 871 818 859 Z" fill="url(#barRight)"/>
-    <path d="M433 545 L433 852" stroke="#ffc979" stroke-width="2" opacity=".55"/>
-    <path d="M820 544 L820 852" stroke="#ffd17b" stroke-width="2" opacity=".5"/>
-    <path d="M390 860 C440 881 532 887 627 888 C727 888 825 878 862 861 C871 860 877 866 879 879 L884 951 C756 978 495 978 370 947 L375 884 C376 870 380 864 390 860 Z" fill="url(#burner)"/>
-    <path d="M390 860 C464 895 788 897 862 861" stroke="#ffcc77" stroke-width="6"/>
-    <path d="M385 868 C465 905 786 906 870 870 L881 953 L373 951 Z" fill="url(#burnerGlow)"/>
-
-    <!-- Broad teardrop flame, drawn as a smooth closed Bézier outline. -->
-    <path d="M517 858 C502 855 489 819 490 786 C491 733 520 691 555 657 C582 630 596 611 606 587 C611 575 617 572 625 579 C675 610 728 661 750 718 C769 767 767 821 743 853 C736 870 542 868 517 858 Z" fill="url(#flame)" stroke="#fff9b1" stroke-width="1.5"/>
-  </g>
-  <path d="M287 876 C303 928 363 947 442 955 C570 970 761 967 865 950 C927 939 956 920 969 883" stroke="#c4f4df" stroke-opacity=".75" stroke-width="3" stroke-linecap="round"/>
-
-  <!-- Sloping blue canopy, its rounded front lip, and top cap. -->
-  <path d="M411 305 C343 329 270 370 225 413 C206 430 199 446 201 468 C205 512 252 527 326 529 C500 541 790 540 948 527 C1023 521 1054 502 1055 469 C1056 447 1043 430 1027 416 C973 367 905 329 845 306 Z" fill="url(#roofLip)" stroke="#08618c" stroke-width="4"/>
-  <path d="M411 305 C341 332 268 372 224 416 C208 433 211 447 232 455 C325 487 923 486 1019 453 C1042 445 1047 432 1032 417 C978 368 907 330 845 306 Z" fill="url(#roof)" stroke="#46c9ec" stroke-width="3"/>
-  <path d="M411 305 C341 332 268 372 224 416 C208 433 211 447 232 455 C325 487 923 486 1019 453 C1042 445 1047 432 1032 417 C978 368 907 330 845 306 Z" fill="url(#roofShine)"/>
-  <path d="M221 451 C308 484 936 485 1028 450" stroke="#6ee3f3" stroke-width="3" opacity=".45"/>
-  <path d="M206 469 C230 515 1021 521 1047 469 L1040 494 C1008 546 249 549 213 493 Z" fill="url(#lipLight)"/>
-
-  <path d="M420 249 C481 218 543 201 623 201 C706 201 774 218 832 247 C763 261 488 262 420 249 Z" fill="url(#capTop)" stroke="#48cdea" stroke-width="3"/>
-  <path d="M420 252 C423 246 433 248 448 250 C549 256 731 257 814 249 C827 247 836 249 839 260 L848 305 C851 316 833 321 811 322 C711 328 515 328 431 319 C413 317 405 313 408 303 Z" fill="url(#cap)" stroke="url(#capEdge)" stroke-width="4"/>
-  <path d="M433 251 C531 256 728 256 817 250" stroke="#67e5fc" stroke-width="5" stroke-linecap="round" opacity=".65"/>
-  <path d="M414 309 C479 324 777 326 841 309" stroke="#052c4c" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+  <!-- Four-pixel front profile; the silhouette stays on the 112px baseline. -->
+  <path fill="#1a5fb4" d="M38 22h52c14 0 24 10 24 24v32c0 14-10 24-24 24H58l-22 10v-10c-13-1-22-10-22-24V46c0-14 10-24 24-24Z"/>
+  <path fill="url(#bubble)" d="M38 18h52c14 0 24 10 24 24v32c0 14-10 24-24 24H58l-22 10V98c-13-1-22-10-22-24V42c0-14 10-24 24-24Z"/>
+  <!-- A fine top edge gives the softly rounded shell a little light. -->
+  <path fill="#99c1f1" d="M38 18h52c14 0 24 10 24 24v2c0-14-10-24-24-24H38c-14 0-24 10-24 24v-2c0-14 10-24 24-24Z"/>
+  <!-- Three broad rays remain legible at launcher sizes. -->
+  <path fill="none" stroke="#fff3b0" stroke-width="4" stroke-linecap="round" d="M64 28v4M37 40l4 4M91 40l-4 4"/>
+  <!-- Short inset depth under the bulb, contained inside the bubble. -->
+  <path fill="#1a5fb4" opacity="0.4" d="M64 41c-10 0-18 8-18 18 0 7 3 11 8 16v7h20v-7c5-5 8-9 8-16 0-10-8-18-18-18Z"/>
+  <path fill="url(#bulb)" d="M64 38c-10 0-18 8-18 18 0 7 3 11 8 16v6h20v-6c5-5 8-9 8-16 0-10-8-18-18-18Z"/>
+  <path fill="none" stroke="#e5a50a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="m58 58 6 6 6-6m-6 6v12"/>
+  <path fill="#c64600" d="M54 78h20v4c0 5-4 8-10 8s-10-3-10-8Z"/>
+  <path fill="#ffbe6f" d="M54 76h20v5c0 4-4 7-10 7s-10-3-10-7Z"/>
+  <path fill="#f8e45c" d="M54 76h20v4H54Z"/>
 </svg>

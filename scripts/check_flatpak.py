@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Exercise the installed bundle, including its Python sandbox and native UI.
 
-Run with any host Python 3: python3 scripts/check_flatpak.py
+Run with any host Python 3: python3 scripts/check_flatpak.py [--user | --system]
 The checks run in the installed Flatpak using temporary application data.
 """
 import asyncio
+import argparse
 import json
 import os
 from pathlib import Path
@@ -14,8 +15,16 @@ import tempfile
 
 
 if not Path("/.flatpak-info").exists():
+    parser = argparse.ArgumentParser(description=__doc__)
+    installation = parser.add_mutually_exclusive_group()
+    installation.add_argument("--user", action="store_const", const="--user", dest="installation")
+    installation.add_argument("--system", action="store_const", const="--system", dest="installation")
+    arguments = parser.parse_args()
+    command = ["flatpak", "run"]
+    if arguments.installation:
+        command.append(arguments.installation)
     raise SystemExit(subprocess.run(
-        ["flatpak", "run", "--command=python3", "io.github.ollamagnome.Lumen", "-"],
+        command + ["--command=python3", "io.github.ollamagnome.Lumen", "-"],
         input=Path(__file__).read_text(), text=True,
     ).returncode)
 
@@ -23,7 +32,7 @@ import gi
 
 for namespace, version in (("Gtk", "4.0"), ("Adw", "1"), ("GtkSource", "5"), ("Poppler", "0.18")):
     gi.require_version(namespace, version)
-from gi.repository import Adw, GLib, Gtk, GtkSource, Poppler
+from gi.repository import Adw, Gio, GLib, Gtk, GtkSource, Poppler
 import cairo
 import httpx
 from ollama_gui.backend import Ollama, ToolHub
@@ -114,6 +123,7 @@ with tempfile.TemporaryDirectory(prefix="flatpak-check-", dir=data_home) as dire
     from ollama_gui.app import Application
     from ollama_gui import __version__
     application = Application()
+    application.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
     ui_ready = []
     about_ready = []
     def open_about():

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lumen</title>
+  <desc id="desc">A warm ivory lightbulb inside a blue speech bubble. A little light for your conversations.</desc>
+  <defs>
+    <linearGradient id="bubble" x1="14" y1="58" x2="114" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3584e4"/>
+      <stop offset="0.5" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#3584e4"/>
+    </linearGradient>
+    <linearGradient id="bulb" x1="46" y1="52" x2="82" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f9f06b"/>
+      <stop offset="0.5" stop-color="#fffbe6"/>
+      <stop offset="1" stop-color="#f9f06b"/>
+    </linearGradient>
+  </defs>
+  <!-- Four-pixel front profile; the silhouette stays on the 112px baseline. -->
+  <path fill="#1a5fb4" d="M38 22h52c14 0 24 10 24 24v32c0 14-10 24-24 24H58l-22 10v-10c-13-1-22-10-22-24V46c0-14 10-24 24-24Z"/>
+  <path fill="url(#bubble)" d="M38 18h52c14 0 24 10 24 24v32c0 14-10 24-24 24H58l-22 10V98c-13-1-22-10-22-24V42c0-14 10-24 24-24Z"/>
+  <!-- A fine top edge gives the softly rounded shell a little light. -->
+  <path fill="#99c1f1" d="M38 18h52c14 0 24 10 24 24v2c0-14-10-24-24-24H38c-14 0-24 10-24 24v-2c0-14 10-24 24-24Z"/>
+  <!-- Three broad rays remain legible at launcher sizes. -->
+  <path fill="none" stroke="#fff3b0" stroke-width="4" stroke-linecap="round" d="M64 28v4M37 40l4 4M91 40l-4 4"/>
+  <!-- Short inset depth under the bulb, contained inside the bubble. -->
+  <path fill="#1a5fb4" opacity="0.4" d="M64 41c-10 0-18 8-18 18 0 7 3 11 8 16v7h20v-7c5-5 8-9 8-16 0-10-8-18-18-18Z"/>
+  <path fill="url(#bulb)" d="M64 38c-10 0-18 8-18 18 0 7 3 11 8 16v6h20v-6c5-5 8-9 8-16 0-10-8-18-18-18Z"/>
+  <path fill="none" stroke="#e5a50a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="m58 58 6 6 6-6m-6 6v12"/>
+  <path fill="#c64600" d="M54 78h20v4c0 5-4 8-10 8s-10-3-10-8Z"/>
+  <path fill="#ffbe6f" d="M54 76h20v5c0 4-4 7-10 7s-10-3-10-7Z"/>
+  <path fill="#f8e45c" d="M54 76h20v4H54Z"/>
+</svg>

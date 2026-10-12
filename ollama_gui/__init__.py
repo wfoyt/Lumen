@@ -1,3 +1,3 @@
 """Lumen: a native GNOME chat app for Ollama."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

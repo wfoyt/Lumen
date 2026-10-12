@@ -25,7 +25,7 @@ from .instructions import DEFAULT_INSTRUCTIONS, LEGACY_INSTRUCTIONS, PREVIOUS_DE
 from .titles import clean_title, needs_title
 from .title_view import FadingTitle
 from .composer import ComposerScroll
-from .branding import APP_ID, LanternPaintable
+from .branding import APP_ID, LumenPaintable
 from .setup_view import SetupView
 from . import history
 
@@ -158,6 +158,14 @@ class Preferences(Adw.PreferencesDialog):
         brave_fields.add(brave_buttons)
         self.brave_result = Gtk.Label(wrap=True, xalign=0)
         brave_fields.add(self.brave_result)
+        brave_help = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=12)
+        brave_help.append(Gtk.Label(label="How to get an API key", xalign=0, css_classes=["heading"]))
+        brave_help.append(Gtk.Label(
+            label="1. Sign in or create an account in the Brave Search API dashboard.\n2. Choose and activate an API plan.\n3. Open API Keys, create a key, and paste it above.\n4. Select Test Brave Search to check your connection.",
+            wrap=True, xalign=0))
+        brave_help.append(Gtk.LinkButton(uri="https://api-dashboard.search.brave.com/", label="Open Brave Search Dashboard", halign=Gtk.Align.START))
+        brave_help.append(Gtk.Label(label="Searches use your Brave Search API plan.", wrap=True, xalign=0, css_classes=["dim-label", "caption"]))
+        brave_fields.add(brave_help)
         self.key.connect("changed", self.update_brave_button)
         self.brave_enabled.connect("notify::active", self.update_brave_fields)
         conversations = Adw.PreferencesGroup(title="Conversations")
@@ -546,6 +554,7 @@ class Window(Adw.ApplicationWindow):
         self.round_boundary = False
         self.follow_response = True
         self.scroll_pending = None
+        self.scrolling_transcript = False
         self.model_names = []
         self.capability_cache = {}
         self.capability_errors = {}
@@ -607,7 +616,7 @@ class Window(Adw.ApplicationWindow):
         self.actions()
         self.connect("close-request", self.on_close)
         if self.store.needs_setup:
-            self.setup = SetupView(self.store.settings, self.lantern_paintable, self.finish_setup)
+            self.setup = SetupView(self.store.settings, self.lumen_paintable, self.finish_setup)
             self.toast.set_child(self.setup)
             self.update_actions()
         else:
@@ -718,8 +727,8 @@ class Window(Adw.ApplicationWindow):
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.messages = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20, css_classes=["chat-transcript"])
         margins(self.messages, 24)
-        self.lantern_paintable = LanternPaintable()
-        self.empty = Adw.StatusPage(paintable=self.lantern_paintable, title="A conversation starts here", description="Choose a model and ask a question. Use + to attach files or images, and the Tools menu to choose tools.")
+        self.lumen_paintable = LumenPaintable()
+        self.empty = Adw.StatusPage(paintable=self.lumen_paintable, title="A conversation starts here", description="Choose a model and ask a question. Use + to attach files or images, and the Tools menu to choose tools.")
         self.stack = Gtk.Stack(vexpand=True, transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=200)
         self.stack.add_named(self.empty, "empty")
         clamp = Adw.Clamp(maximum_size=800, tightening_threshold=600)
@@ -727,6 +736,7 @@ class Window(Adw.ApplicationWindow):
         self.scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
         self.scroll.set_child(clamp)
         self.scroll.get_vadjustment().connect("changed", self.transcript_resized)
+        self.scroll.get_vadjustment().connect("value-changed", self.transcript_scrolled)
         self.stack.add_named(self.scroll, "messages")
         content.append(self.stack)
         composer = margins(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4), 24)
@@ -826,6 +836,10 @@ class Window(Adw.ApplicationWindow):
 
     def update_search(self):
         self.search_query = self.search_entry.get_text().strip().casefold()
+        row = self.chat_list.get_first_child()
+        while row:
+            row.search_text = searchable_chat_text(row.chat)
+            row = row.get_next_sibling()
         self.chat_list.invalidate_filter()
         matches = any(self.search_query in searchable_chat_text(chat) for chat in self.store.chats)
         self.sidebar_results.set_visible_child_name("results" if matches else "empty")
@@ -1277,7 +1291,10 @@ class Window(Adw.ApplicationWindow):
         if self.split.get_collapsed():
             self.split.set_show_sidebar(False)
 
-    def render_chat(self, final_code_expansion=()):
+    def render_chat(self, final_code_expansion=(), reset_scroll=True):
+        self.update_search()
+        if reset_scroll:
+            self.follow_response = True
         self.finish_thinking()
         self.thinking_label = None
         self.active_label = None
@@ -1423,18 +1440,28 @@ class Window(Adw.ApplicationWindow):
         return preview
 
     def scroll_bottom(self):
-        self.follow_response = True
-        if self.scroll_pending is not None:
+        if not self.follow_response or self.scroll_pending is not None:
             return
         def move():
             self.scroll_pending = None
-            adj = self.scroll.get_vadjustment()
-            adj.set_value(max(0, adj.get_upper() - adj.get_page_size()))
+            # A user can scroll away after this idle callback was queued.
+            if self.follow_response:
+                adj = self.scroll.get_vadjustment()
+                self.scrolling_transcript = True
+                try:
+                    adj.set_value(max(0, adj.get_upper() - adj.get_page_size()))
+                finally:
+                    self.scrolling_transcript = False
             return GLib.SOURCE_REMOVE
         self.scroll_pending = GLib.idle_add(move)
 
+    def transcript_scrolled(self, adjustment):
+        if not self.scrolling_transcript:
+            bottom = max(0, adjustment.get_upper() - adjustment.get_page_size())
+            self.follow_response = adjustment.get_value() >= bottom - 2
+
     def transcript_resized(self, adjustment):
-        if self.busy and self.follow_response:
+        if self.follow_response:
             self.scroll_bottom()
 
     def supports_images(self, model=None):
@@ -1651,6 +1678,7 @@ class Window(Adw.ApplicationWindow):
         self.active_tool = None
         self.active_reasoning = None
         self.round_boundary = False
+        self.follow_response = True
         self.set_busy(True)
         self.show_thinking()
         history_messages = [{"role": "system", "content": system_instructions(cfg)}] + self.current["messages"]
@@ -1818,7 +1846,7 @@ class Window(Adw.ApplicationWindow):
                 if message["role"] == "assistant":
                     message["model"] = self.reply_model
             self.current["messages"].extend(messages)
-            self.render_chat(final_code_expansion=expansion)
+            self.render_chat(final_code_expansion=expansion, reset_scroll=False)
             self.get_application().notify_completion(self.current)
             self.request_title(self.current)
         self.pending_attachments = []
@@ -1859,7 +1887,7 @@ class Window(Adw.ApplicationWindow):
 
     def on_close(self, *_):
         self.closed = True
-        self.lantern_paintable.close()
+        self.lumen_paintable.close()
         self.clear_capabilities()
         if self.scroll_pending is not None:
             GLib.source_remove(self.scroll_pending)

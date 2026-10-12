@@ -18,8 +18,14 @@
   <provides><binary>lumen</binary></provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.2" date="2026-10-12">
+      <description>
+        <p>Conversation search updates after replies and version changes. Scrolling up pauses automatic following while replies stream, and returning to the bottom resumes it.</p>
+        <p>Updated Lumen branding, Brave Search setup guidance, documentation and screenshots.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-10-10">
-      <description><p>New scalable vector lantern icons throughout Lumen, including a theme-aware monochrome lantern and a full-color desktop icon.</p></description>
+      <description><p>Scalable vector icons throughout Lumen, including a theme-aware monochrome mark and a full-color desktop icon.</p></description>
     </release>
     <release version="0.1.0" date="2026-10-09"/>
   </releases>

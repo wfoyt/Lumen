@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lumen symbolic icon</title>
+  <desc id="desc">A lightbulb and three rays inside a rounded speech bubble. Transparent cutouts allow the single-color mark to invert with the app theme.</desc>
+  <g fill="#000000">
+    <!-- The desktop icon's silhouette, opened into a bold monochrome frame. -->
+    <path fill-rule="evenodd" d="M38 18h52c14 0 24 10 24 24v32c0 14-10 24-24 24H58l-22 10V98c-13-1-22-10-22-24V42c0-14 10-24 24-24Zm0 6c-11 0-18 7-18 18v32c0 11 7 18 18 18h4v7l15-7h33c11 0 18-7 18-18V42c0-11-7-18-18-18Z"/>
+    <path fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round" d="M64 28v4M37 40l4 4M91 40l-4 4"/>
+    <!-- The filament is a transparent cutout, not a fixed white fill. -->
+    <path fill-rule="evenodd" d="M64 38c-10 0-18 8-18 18 0 7 3 11 8 16v6h20v-6c5-5 8-9 8-16 0-10-8-18-18-18Zm-7 19-2 2 7 7v10h4V66l7-7-2-2-7 7Z"/>
+    <path d="M54 82h20c0 4-4 8-10 8s-10-4-10-8Z"/>
+  </g>
+</svg>

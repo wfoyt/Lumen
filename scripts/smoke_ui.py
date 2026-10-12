@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
     def finish():
         prefs.close()
         assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon("lumen-symbolic")
-        assert window.empty.get_paintable() is window.lantern_paintable
+        assert window.empty.get_paintable() is window.lumen_paintable
         assert window.get_icon_name() == "io.github.ollamagnome.Lumen"
         assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon("io.github.ollamagnome.Lumen")
         assert window.send.get_icon_name() == "go-up-symbolic"

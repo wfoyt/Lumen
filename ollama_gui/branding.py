@@ -1,4 +1,4 @@
-"""Render the vector lantern at the requested size and current theme color."""
+"""Render Lumen's vector mark at the requested size and current theme color."""
 from pathlib import Path
 import gi
 gi.require_version("Rsvg", "2.0")
@@ -7,7 +7,7 @@ from gi.repository import Adw, Gdk, GObject, Graphene, Rsvg
 APP_ID = "io.github.ollamagnome.Lumen"
 
 
-class LanternPaintable(GObject.Object, Gdk.Paintable):
+class LumenPaintable(GObject.Object, Gdk.Paintable):
     def __init__(self):
         super().__init__()
         self.svg = Rsvg.Handle.new_from_file(str(Path(__file__).parent / "icons/hicolor/scalable/apps/lumen-symbolic.svg"))
