@@ -17,7 +17,7 @@ async def reply(self, model, messages, servers, emit):
     return [{"role": "assistant", "content": "unique-reply-needle"}]
 
 
-with tempfile.TemporaryDirectory() as folder, patch.object(Window, "refresh_models"), patch.object(Window, "refresh_tools"), patch.object(Window, "request_title"), patch.object(Application, "notify_completion"), patch.object(Ollama, "chat", reply):
+with tempfile.TemporaryDirectory() as folder, patch.object(Window, "refresh_models"), patch.object(Window, "refresh_tools"), patch.object(Window, "request_title"), patch.object(Window, "request_memory"), patch.object(Application, "notify_completion"), patch.object(Ollama, "chat", reply):
     app = Application()
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
     app.register(None)
@@ -104,10 +104,19 @@ with tempfile.TemporaryDirectory() as folder, patch.object(Window, "refresh_mode
         assert window.follow_response
         window.set_busy(True)
         window.event("token", "\n\n" + "Following again. " * 100)
+        window.resumed_checks = 0
         later(resumed)
 
     def resumed():
         assert window.follow_response
+        # Following is queued on the GTK idle loop after the text is laid out.
+        # A timeout can run first when a large transcript is being reallocated.
+        if (window.scroll_pending is not None or
+                abs(window.scroll.get_vadjustment().get_value() - bottom()) >= 2):
+            window.resumed_checks += 1
+            assert window.resumed_checks < 50, (window.scroll.get_vadjustment().get_value(), bottom(), window.scroll_pending)
+            GLib.timeout_add(100, checked, resumed)
+            return
         assert abs(window.scroll.get_vadjustment().get_value() - bottom()) < 2
         window.set_busy(False)
         print("PASS: completed replies, version changes and cancelled turns update search; scrolling pauses queued/live updates, survives resize/completion and resumes at the bottom")

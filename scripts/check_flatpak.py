@@ -38,7 +38,8 @@ import httpx
 from ollama_gui.backend import Ollama, ToolHub
 from ollama_gui.math_render import equation_png
 from ollama_gui.python_tool import execute_python, MAX_OUTPUT_BYTES
-from ollama_gui.storage import DEFAULT_SETTINGS, tool_servers
+from ollama_gui.storage import DEFAULT_SETTINGS, Store, tool_servers
+from ollama_gui.instructions import system_instructions
 
 
 async def check_tools(secret):
@@ -100,6 +101,33 @@ else:
     assert await backend.title("test", history + result) == "Python Calculation"
 
 
+async def check_memories(root):
+    store = Store(root / "memory-test")
+    assert store.settings["memory_enabled"] and store.settings["auto_memory_enabled"]
+    requests = []
+    def model_response(request):
+        data = json.loads(request.content)
+        context = json.loads(data["messages"][-1]["content"])
+        requests.append(context)
+        assert "tools" not in data and data["format"]["type"] == "object"
+        assert context["user_text"] == "I prefer short replies."
+        update = {"save": [], "forget": []}
+        if not context["existing_memories"]:
+            update["save"].append({"text": "The user prefers short replies.",
+                                    "evidence": "I prefer short replies.", "replaces": ""})
+        return httpx.Response(200, json={"done": True, "message": {"content": json.dumps(update)}})
+    backend = Ollama("http://test", httpx.MockTransport(model_response))
+    text = "I prefer short replies."
+    for _ in range(2):
+        result = await backend.memory_update("test", text, store.memories)
+        store.apply_memory_update(result, text, "fictional-chat")
+    assert len(requests) == 2 and len(store.memories) == 1
+    assert Store(store.root).memories == store.memories
+    assert "The user prefers short replies." in system_instructions(store.settings, memories=store.memories)
+    store.settings["memory_enabled"] = False
+    assert "The user prefers short replies." not in system_instructions(store.settings, memories=store.memories)
+
+
 data_home = Path(os.environ["XDG_DATA_HOME"])
 data_home.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix="flatpak-check-", dir=data_home) as directory:
@@ -109,6 +137,7 @@ with tempfile.TemporaryDirectory(prefix="flatpak-check-", dir=data_home) as dire
     os.environ["LUMEN_TEST_SECRET"] = "test-only environment value"
     os.environ["XDG_DATA_HOME"] = str(root)
     asyncio.run(check_tools(secret))
+    asyncio.run(check_memories(root))
     assert equation_png(r"\frac{1}{2}", display=True), "Equation rendering failed"
     from pypdf import PdfWriter
     pdf = root / "preview.pdf"
@@ -125,9 +154,38 @@ with tempfile.TemporaryDirectory(prefix="flatpak-check-", dir=data_home) as dire
     application = Application()
     application.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
     ui_ready = []
+    personalization_ready = []
+    composer_ready = []
     about_ready = []
+    def check_setup():
+        window = application.get_active_window()
+        setup = window.setup
+        assert setup is not None
+        setup.navigation.push_by_tag("personalization")
+        fields = setup.personalization
+        assert fields.memory_enabled.get_active() and fields.automatic.get_active()
+        assert not fields.name_fields.get_visible() and not fields.about_fields.get_visible()
+        fields.name_enabled.set_active(True)
+        fields.name.set_text("Flatpak Test")
+        fields.about_enabled.set_active(True)
+        fields.about.get_buffer().set_text("I am learning Spanish.")
+        setup.personalization_next.emit("clicked")
+        setup.finish_button.emit("clicked")
+        assert window.setup is None and window.store.settings["user_name"] == "Flatpak Test"
+        dialog = window.show_personalization()
+        personalization_ready.append(
+            dialog.get_visible_page() is dialog.personalization
+            and dialog.personalization.name.get_text() == "Flatpak Test"
+            and dialog.personalization.memory_enabled.get_active()
+            and dialog.personalization.automatic.get_active()
+        )
+        dialog.close()
+        window.input.get_buffer().set_text("\n".join(f"Line {index}" for index in range(40)))
+        return GLib.SOURCE_REMOVE
     def open_about():
         window = application.get_active_window()
+        composer_ready.append(window.input_scroll.get_height() == window.input_scroll.MAX_HEIGHT)
+        window.input.get_buffer().set_text("Short again")
         menu = window.app_menu.get_menu_model()
         labels = [menu.get_item_attribute_value(i, "label", None).get_string() for i in range(menu.get_n_items())]
         window.activate_action("win.about", None)
@@ -144,12 +202,16 @@ with tempfile.TemporaryDirectory(prefix="flatpak-check-", dir=data_home) as dire
         window = application.get_active_window()
         ui_ready.append(window is not None and window.get_visible())
         if window is not None:
+            composer_ready.append(window.input_scroll.get_height() == window.input_scroll.MIN_HEIGHT)
             window.close()
         application.quit()
         return GLib.SOURCE_REMOVE
-    GLib.timeout_add(500, open_about)
-    GLib.timeout_add(1500, close_window)
+    GLib.timeout_add(500, check_setup)
+    GLib.timeout_add(1100, open_about)
+    GLib.timeout_add(2200, close_window)
     assert application.run(["lumen"]) == 0
     assert ui_ready == [True], "Window did not open"
+    assert personalization_ready == [True], "Setup/personalization controls failed"
+    assert composer_ready == [True, True], "Composer growth/shrink failed"
     assert about_ready == [True], "About Lumen menu/dialog failed"
-print("Flatpak checks passed: imports, equations, PDF rendering, MCP, answer recovery, titles, Python isolation/limits, UI and About Lumen.")
+print("Flatpak checks passed: imports, equations, PDF rendering, MCP, answer recovery, titles, Python isolation/limits, memory persistence/deduplication/toggles, setup, personalization, composer growth/shrink, UI and About Lumen.")

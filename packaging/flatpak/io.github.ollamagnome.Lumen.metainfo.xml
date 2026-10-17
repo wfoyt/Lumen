@@ -18,6 +18,14 @@
   <provides><binary>lumen</binary></provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-10-17">
+      <description>
+        <p>Lumen remembers useful details from normal conversation across chats, skips repeated facts, and updates memories when details change. Memory and automatic saving are enabled by default.</p>
+        <p>Personalization preferences let you share your name and profile, control memory, and review, edit or delete saved memories. The same choices are available during first-run setup.</p>
+        <p>Updated assistant instructions, custom-instruction guidance and isolated setup and memory testing tools.</p>
+        <p>Fixed occasional clipping in the message composer and code previews after text changes.</p>
+      </description>
+    </release>
     <release version="0.1.2" date="2026-10-12">
       <description>
         <p>Conversation search updates after replies and version changes. Scrolling up pauses automatic following while replies stream, and returning to the bottom resumes it.</p>

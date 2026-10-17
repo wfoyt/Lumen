@@ -21,7 +21,9 @@ from .tool_output import saved_tool_details, searchable_chat_text, tool_display_
 from .model_picker import ModelPicker
 from .image_view import image_thumbnails, image_preview
 from .attachment_view import file_preview
-from .instructions import DEFAULT_INSTRUCTIONS, LEGACY_INSTRUCTIONS, PREVIOUS_DEFAULT_INSTRUCTIONS, custom_instructions_enabled, system_instructions
+from .instructions import DEFAULT_INSTRUCTIONS, STOCK_INSTRUCTIONS, custom_instructions_enabled, system_instructions
+from .memory import automatic_memory_enabled, memory_user_text, memory_status_text
+from .personalization_view import PersonalizationPage
 from .titles import clean_title, needs_title
 from .title_view import FadingTitle
 from .composer import ComposerScroll
@@ -106,6 +108,7 @@ class Preferences(Adw.PreferencesDialog):
         self.set_content_height(720)
         self.loading_fields = True
         self.autosave_pending = None
+        self.result = Gtk.Label(wrap=True, xalign=0)
         cfg = window.store.settings
         page = Adw.PreferencesPage(title="General", icon_name="preferences-system-symbolic")
         self.general_page = page
@@ -172,6 +175,8 @@ class Preferences(Adw.PreferencesDialog):
         page.add(conversations)
         self.auto_titles = Adw.SwitchRow(title="Automatically Name Conversations", subtitle="Ask the model for a short title after the first reply.", active=cfg.get("auto_titles", True))
         conversations.add(self.auto_titles)
+        self.personalization = PersonalizationPage(self)
+        self.add(self.personalization)
         advanced = Adw.PreferencesPage(title="Advanced", icon_name="preferences-other-symbolic")
         self.advanced_page = advanced
         self.add(advanced)
@@ -190,11 +195,13 @@ class Preferences(Adw.PreferencesDialog):
         advanced.add(math)
         self.latex_enabled = Adw.SwitchRow(title="LaTeX Equations Support", subtitle="Render inline and display equations in replies and model thinking.", active=cfg.get("latex_enabled", True))
         math.add(self.latex_enabled)
-        prompt = Adw.PreferencesGroup(title="Assistant Instructions", description="The default instructions cover search and Python. Equation guidance is added when LaTeX is enabled. The current local date and time are added to every request, including custom instructions.")
+        prompt = Adw.PreferencesGroup(title="Assistant Instructions", description="The defaults cover tools, personalization and memory. Your enabled profile, saved memories, equation guidance and current local time are also added to custom instructions.")
         advanced.add(prompt)
         self.custom_system = Adw.SwitchRow(title="Use Custom Assistant Instructions", active=custom_instructions_enabled(cfg))
         prompt.add(self.custom_system)
-        self.system = textview(DEFAULT_INSTRUCTIONS if cfg["system"] in (LEGACY_INSTRUCTIONS, PREVIOUS_DEFAULT_INSTRUCTIONS) else cfg["system"])
+        self.custom_warning = Gtk.Label(label="Custom instructions replace Lumen's default guidance. Conflicting instructions may cause tools or memory to work incorrectly.", wrap=True, xalign=0, css_classes=["warning", "caption"], margin_top=8, margin_bottom=8)
+        prompt.add(self.custom_warning)
+        self.system = textview(DEFAULT_INSTRUCTIONS if cfg["system"] in STOCK_INSTRUCTIONS else cfg["system"])
         self.system_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         self.system_revealer.set_child(preferences_editor(self.system, 180, 280))
         prompt.add(self.system_revealer)
@@ -212,7 +219,6 @@ class Preferences(Adw.PreferencesDialog):
         self.custom_mcp.connect("notify::active", self.update_advanced_editors)
         apply = Adw.PreferencesGroup()
         page.add(apply)
-        self.result = Gtk.Label(wrap=True, xalign=0)
         apply.add(self.result)
         tools_apply = Adw.PreferencesGroup()
         tools_page.add(tools_apply)
@@ -227,13 +233,13 @@ class Preferences(Adw.PreferencesDialog):
         advanced_apply.add(advanced_result)
         reset_group = Adw.PreferencesGroup(title="Settings")
         page.add(reset_group)
-        reset_row = Adw.ActionRow(title="Reset to Default Settings", subtitle="Restore preferences and remove saved MCP configurations and API keys. Conversations are kept.")
+        reset_row = Adw.ActionRow(title="Reset to Default Settings", subtitle="Restore preferences, clear your profile, and remove MCP configurations and API keys. Conversations and saved memories are kept.")
         self.reset_button = Gtk.Button(label="Reset…", valign=Gtk.Align.CENTER, css_classes=["destructive-action"])
         self.reset_button.connect("clicked", self.reset_defaults)
         reset_row.add_suffix(self.reset_button)
         reset_row.set_activatable_widget(self.reset_button)
         reset_group.add(reset_row)
-        erase_row = Adw.ActionRow(title="Reset All Data", subtitle="Delete all conversations, drafts, attachments and preferences from this app.")
+        erase_row = Adw.ActionRow(title="Reset All Data", subtitle="Delete all conversations, memories, profile details, drafts, attachments and preferences from this app.")
         self.erase_button = Gtk.Button(label="Reset All Data…", valign=Gtk.Align.CENTER, css_classes=["destructive-action"])
         self.erase_button.connect("clicked", self.reset_all_data)
         erase_row.add_suffix(self.erase_button)
@@ -255,9 +261,11 @@ class Preferences(Adw.PreferencesDialog):
             field.connect("changed", self.queue_autosave)
         for editor in (self.system, self.servers):
             editor.get_buffer().connect("changed", self.queue_autosave)
+        self.personalization.connect_changes()
         self.connect("closed", self.preferences_closed)
 
     def preferences_closed(self, *_):
+        self.personalization.close()
         if self.autosave_pending is not None:
             self.flush_autosave()
 
@@ -338,7 +346,8 @@ class Preferences(Adw.PreferencesDialog):
         self.loading_fields = True
         cfg = self.window.store.settings
         self.url.set_text(cfg["url"])
-        self.system.get_buffer().set_text(DEFAULT_INSTRUCTIONS if cfg["system"] in (LEGACY_INSTRUCTIONS, PREVIOUS_DEFAULT_INSTRUCTIONS) else cfg["system"])
+        self.system.get_buffer().set_text(DEFAULT_INSTRUCTIONS if cfg["system"] in STOCK_INSTRUCTIONS else cfg["system"])
+        self.personalization.load(cfg)
         self.custom_system.set_active(custom_instructions_enabled(cfg))
         self.custom_mcp.set_active(cfg.get("custom_mcp_enabled", False))
         self.tools_enabled.set_active(cfg.get("tools_enabled", True))
@@ -360,7 +369,7 @@ class Preferences(Adw.PreferencesDialog):
         self.loading_fields = False
 
     def reset_all_data(self, *_):
-        dialog = Adw.AlertDialog(heading="Reset All App Data?", body="Permanently delete every conversation, saved attachment, draft, API key and preference in this app. This cannot be undone.")
+        dialog = Adw.AlertDialog(heading="Reset All App Data?", body="Permanently delete every conversation, saved memory, profile detail, attachment, draft, API key and preference in this app. This cannot be undone.")
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("erase", "Reset All Data")
         dialog.set_response_appearance("erase", Adw.ResponseAppearance.DESTRUCTIVE)
@@ -390,7 +399,7 @@ class Preferences(Adw.PreferencesDialog):
             self.test_button = None
 
     def reset_defaults(self, *_):
-        dialog = Adw.AlertDialog(heading="Reset Preferences?", body="Restore the default Ollama connection and assistant instructions, and remove saved MCP servers and API keys. Your conversations will be kept.")
+        dialog = Adw.AlertDialog(heading="Reset Preferences?", body="Restore the default connection and instructions, clear your name and profile, and remove saved MCP servers and API keys. Your conversations and saved memories will be kept.")
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("reset", "Reset")
         dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
@@ -403,6 +412,8 @@ class Preferences(Adw.PreferencesDialog):
                 cfg = copy.deepcopy(DEFAULT_SETTINGS)
                 self.window.store.write("settings.json", cfg)
                 self.window.store.settings = cfg
+                self.window.cancel_memories()
+                self.window.memory_status = memory_status_text(cfg)
                 self.cancel_test()
                 self.load_saved_fields()
                 self.result.set_text("Default settings restored.")
@@ -490,7 +501,7 @@ class Preferences(Adw.PreferencesDialog):
         try:
             previous = self.window.store.settings
             key_changed = self.key.get_text().strip() != self.initial_brave_key.strip()
-            errors = []
+            errors = self.personalization.validation_errors()
             try:
                 url = validate_url(self.url.get_text().strip())
             except ValueError as exc:
@@ -502,6 +513,7 @@ class Preferences(Adw.PreferencesDialog):
                 servers = copy.deepcopy(previous["mcpServers"])
                 errors.append(str(exc))
             cfg = {**self.window.store.settings, "url": url,
+                   **self.personalization.values(),
                    "system": buffer_text(self.system), "custom_system_enabled": self.custom_system.get_active(),
                    "custom_mcp_enabled": self.custom_mcp.get_active(), "mcpServers": servers,
                    "tools_enabled": self.tools_enabled.get_active(),
@@ -514,6 +526,9 @@ class Preferences(Adw.PreferencesDialog):
             if cfg != previous:
                 self.window.store.write("settings.json", cfg)
                 self.window.store.settings = cfg
+                if any(cfg.get(key) != previous.get(key) for key in ("memory_enabled", "auto_memory_enabled", "url")):
+                    self.window.cancel_memories()
+                    self.window.memory_status = memory_status_text(cfg)
                 if not cfg["auto_titles"]:
                     self.window.cancel_titles()
                 display_keys = ("show_thinking", "friendly_search", "friendly_python", "latex_enabled")
@@ -576,6 +591,10 @@ class Window(Adw.ApplicationWindow):
         self.turn_generation = 0
         self.closed = False
         self.title_jobs = {}
+        self.memory_future = None
+        self.memory_queue = []
+        self.memory_generation = 0
+        self.memory_status = memory_status_text(self.store.settings)
         icons = Gtk.IconTheme.get_for_display(self.get_display())
         icons.add_search_path(str(Path(__file__).parent / "icons"))
         self.set_icon_name(APP_ID)
@@ -625,6 +644,7 @@ class Window(Adw.ApplicationWindow):
     def finish_setup(self, settings):
         self.store.write("settings.json", settings)
         self.store.settings = settings
+        self.memory_status = memory_status_text(settings)
         self.setup = None
         self.toast.set_child(self.split)
         self.start_chat()
@@ -641,13 +661,19 @@ class Window(Adw.ApplicationWindow):
         self.update_actions()
 
     def actions(self):
-        for name, callback in (("new", lambda *_: self.new_chat()), ("preferences", lambda *_: Preferences(self).present(self)), ("refresh", lambda *_: self.refresh_models()), ("delete", self.delete_chat), ("search", lambda *_: self.open_search()), ("about", self.show_about)):
+        for name, callback in (("new", lambda *_: self.new_chat()), ("preferences", lambda *_: Preferences(self).present(self)), ("personalization", self.show_personalization), ("refresh", lambda *_: self.refresh_models()), ("delete", self.delete_chat), ("search", lambda *_: self.open_search()), ("about", self.show_about)):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
             self.add_action(action)
         self.get_application().set_accels_for_action("win.new", ["<Control>n"])
         self.get_application().set_accels_for_action("win.preferences", ["<Control>comma"])
         self.get_application().set_accels_for_action("win.search", ["<Control>f"])
+
+    def show_personalization(self, *_):
+        dialog = Preferences(self)
+        dialog.set_visible_page(dialog.personalization)
+        dialog.present(self)
+        return dialog
 
     def show_about(self, *_):
         dialog = Adw.AboutDialog(
@@ -1080,7 +1106,9 @@ class Window(Adw.ApplicationWindow):
     def reset_all_data(self):
         old_ids = [chat["id"] for chat in self.store.chats]
         self.cancel_titles()
+        self.cancel_memories()
         self.store.reset_all()
+        self.memory_status = "All saved memories and profile details were deleted."
         for identifier in old_ids:
             self.get_application().withdraw_notification(f"reply-{identifier}")
         self.turn_generation += 1
@@ -1119,7 +1147,7 @@ class Window(Adw.ApplicationWindow):
     def update_actions(self):
         available = self.setup is None and not self.busy and not self.draft_loading
         self.lookup_action("new").set_enabled(available and not any(not chat["messages"] for chat in self.store.chats))
-        for name in ("delete", "preferences", "refresh", "search"):
+        for name in ("delete", "preferences", "personalization", "refresh", "search"):
             self.lookup_action(name).set_enabled(available)
 
     def activate_chat(self, chat):
@@ -1681,7 +1709,7 @@ class Window(Adw.ApplicationWindow):
         self.follow_response = True
         self.set_busy(True)
         self.show_thinking()
-        history_messages = [{"role": "system", "content": system_instructions(cfg)}] + self.current["messages"]
+        history_messages = [{"role": "system", "content": system_instructions(cfg, memories=self.store.memories)}] + self.current["messages"]
         def emit(kind, value):
             GLib.idle_add(self.dispatch_event, generation, kind, value)
         self.future = self.worker.submit(Ollama(cfg["url"]).chat(model, history_messages, servers, emit), lambda messages, error: self.finished(messages, error, generation))
@@ -1767,6 +1795,7 @@ class Window(Adw.ApplicationWindow):
             replacement = history.edited_message(message, buffer_text(editor).strip()) if edit else None
             parent = history.fork(chat, index, replacement, model)
             self.cancel_titles(chat["id"])
+            self.cancel_memories()
             self.pending_attachments = []
             self.save_store()
             self.render_chat()
@@ -1849,11 +1878,67 @@ class Window(Adw.ApplicationWindow):
             self.render_chat(final_code_expansion=expansion, reset_scroll=False)
             self.get_application().notify_completion(self.current)
             self.request_title(self.current)
+            self.request_memory(self.current)
         self.pending_attachments = []
         self.revision_parent = None
         self.save_store()
         self.update_actions()
         self.input.grab_focus()
+
+    def cancel_memories(self):
+        pending = self.memory_future is not None or bool(self.memory_queue)
+        self.memory_generation += 1
+        self.memory_queue.clear()
+        if self.memory_future is not None:
+            self.memory_future.cancel()
+            self.memory_future = None
+        if pending:
+            self.memory_status = "Pending automatic memory checks cancelled."
+
+    def request_memory(self, chat):
+        cfg = self.store.settings
+        if self.closed or not automatic_memory_enabled(cfg):
+            return
+        message = next((item for item in reversed(chat["messages"]) if item["role"] == "user"), {})
+        text = memory_user_text(message)
+        if not text.strip():
+            return
+        self.memory_queue.append({"text": text, "chat_id": chat["id"], "model": self.reply_model, "url": cfg["url"]})
+        self.next_memory()
+
+    def next_memory(self):
+        if self.closed or self.memory_future is not None or not self.memory_queue or not automatic_memory_enabled(self.store.settings):
+            return
+        job = self.memory_queue.pop(0)
+        generation = self.memory_generation
+        snapshot = copy.deepcopy(self.store.memories)
+        self.memory_status = "Checking your message for useful memories…"
+        def done(value, error):
+            if self.closed or generation != self.memory_generation:
+                return
+            self.memory_future = None
+            valid = (automatic_memory_enabled(self.store.settings) and self.store.settings["url"] == job["url"]
+                     and any(chat["id"] == job["chat_id"] for chat in self.store.chats) and self.store.memories == snapshot)
+            if valid:
+                try:
+                    if error:
+                        raise error
+                    saved, forgotten = self.store.apply_memory_update(value, job["text"], job["chat_id"])
+                    if saved or forgotten:
+                        self.memory_status = "Memory updated. Your saved details are ready for future conversations."
+                        toast = Adw.Toast.new("Memory updated")
+                        toast.set_button_label("Manage")
+                        toast.set_action_name("win.personalization")
+                        self.toast.add_toast(toast)
+                    else:
+                        self.memory_status = "Memory is up to date. No new details to save."
+                except Exception as exc:
+                    self.memory_status = "Automatic memory was not updated: " + error_text(exc) + " You can add memories manually in Personalization."
+                    self.notify("Automatic memory was not updated. See Preferences → Personalization for details.")
+            else:
+                self.memory_status = "A stale memory check was discarded."
+            self.next_memory()
+        self.memory_future = self.worker.submit(Ollama(job["url"]).memory_update(job["model"], job["text"], snapshot), done)
 
     def delete_chat(self, *_, chat=None):
         if self.busy or self.draft_loading:
@@ -1868,6 +1953,7 @@ class Window(Adw.ApplicationWindow):
         def response(_, value):
             if value == "delete" and target in self.store.chats and not self.busy and not self.draft_loading:
                 self.cancel_titles(target["id"])
+                self.cancel_memories()
                 self.store.chats.remove(target)
                 self.drafts.pop(target["id"], None)
                 self.get_application().withdraw_notification(f"reply-{target['id']}")
@@ -1893,6 +1979,7 @@ class Window(Adw.ApplicationWindow):
             GLib.source_remove(self.scroll_pending)
             self.scroll_pending = None
         self.cancel_titles()
+        self.cancel_memories()
         self.worker.close()
         if self.setup is None:
             self.save_store()

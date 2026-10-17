@@ -12,6 +12,8 @@ class FirstRunTests(unittest.TestCase):
             store = Store(root)
             self.assertTrue(store.needs_setup)
             self.assertEqual(store.settings, DEFAULT_SETTINGS)
+            self.assertTrue(store.settings["memory_enabled"])
+            self.assertTrue(store.settings["auto_memory_enabled"])
             self.assertFalse((Path(root) / "settings.json").exists())
 
     def test_completed_setup_survives_restart(self):

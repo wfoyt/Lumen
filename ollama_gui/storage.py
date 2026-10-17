@@ -2,9 +2,12 @@ import json
 import os
 import copy
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from .instructions import DEFAULT_INSTRUCTIONS
+from .memory import MAX_MEMORIES, clean_memory, memory_key, validate_memory_update
 
 
 DEFAULT_SETTINGS = {
@@ -22,6 +25,12 @@ DEFAULT_SETTINGS = {
     "friendly_python": True,
     "latex_enabled": True,
     "brave_enabled": False,
+    "name_enabled": False,
+    "user_name": "",
+    "about_enabled": False,
+    "user_about": "",
+    "memory_enabled": True,
+    "auto_memory_enabled": True,
 }
 
 PYTHON_SERVER_NAME = "Built-in Python"
@@ -106,6 +115,55 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.settings = self.read("settings.json", copy.deepcopy(DEFAULT_SETTINGS))
         self.chats = self.read("chats.json", [])
+        self.memories = self.read("memories.json", [])
+
+    def set_memories(self, memories):
+        if len(memories) > MAX_MEMORIES:
+            raise ValueError(f"Memory is full ({MAX_MEMORIES} entries). Delete or combine some memories first.")
+        self.write("memories.json", memories)
+        self.memories = memories
+
+    def save_memory(self, text, identifier=None, source="manual", chat_id=None):
+        text = clean_memory(text)
+        memories = copy.deepcopy(self.memories)
+        if any(memory_key(item["text"]) == memory_key(text) and item["id"] != identifier for item in memories):
+            raise ValueError("That memory is already saved.")
+        item = next((item for item in memories if item["id"] == identifier), None)
+        if identifier is not None and item is None:
+            raise ValueError("That memory no longer exists.")
+        if item is None:
+            item = {"id": str(uuid.uuid4())}
+            memories.append(item)
+        item.update(text=text, source=source, chat_id=chat_id,
+                    updated_at=datetime.now(timezone.utc).isoformat())
+        self.set_memories(memories)
+
+    def delete_memory(self, identifier):
+        self.set_memories([item for item in self.memories if item["id"] != identifier])
+
+    def apply_memory_update(self, value, user_text, chat_id):
+        validate_memory_update(value, user_text, self.memories)
+        memories = copy.deepcopy(self.memories)
+        removed = {item["id"] for item in value["forget"]}
+        memories = [item for item in memories if item["id"] not in removed]
+        saved = 0
+        for entry in value["save"]:
+            text = clean_memory(entry["text"])
+            target = next((item for item in memories if item["id"] == entry["replaces"]), None)
+            duplicate = next((item for item in memories if memory_key(item["text"]) == memory_key(text)), None)
+            if duplicate is not None and duplicate is not target:
+                continue
+            if target is None:
+                target = {"id": str(uuid.uuid4())}
+                memories.append(target)
+            if memory_key(target.get("text", "")) == memory_key(text):
+                continue
+            target.update(text=text, source="automatic", chat_id=chat_id,
+                          updated_at=datetime.now(timezone.utc).isoformat())
+            saved += 1
+        if memories != self.memories:
+            self.set_memories(memories)
+        return saved, len(removed)
 
     @property
     def needs_setup(self):
@@ -136,6 +194,7 @@ class Store:
         settings = copy.deepcopy(DEFAULT_SETTINGS)
         self.write("settings.json", settings)
         self.write("chats.json", [])
-        for name in ("settings.tmp", "chats.tmp"):
+        self.set_memories([])
+        for name in ("settings.tmp", "chats.tmp", "memories.tmp"):
             (self.root / name).unlink(missing_ok=True)
         self.settings, self.chats = settings, []

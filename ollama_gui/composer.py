@@ -7,13 +7,12 @@ class ComposerTextView(Gtk.TextView):
         super().__init__(wrap_mode=Gtk.WrapMode.WORD_CHAR, left_margin=16,
                          right_margin=16, top_margin=16, bottom_margin=12)
         self.resized = resized
-        self.previous_width = -1
 
     def do_size_allocate(self, width, height, baseline):
         Gtk.TextView.do_size_allocate(self, width, height, baseline)
-        if width != self.previous_width:
-            self.previous_width = width
-            self.resized()
+        # Text can reflow at the same width when its buffer changes. GTK's
+        # allocation happens after that layout is ready, unlike the changed signal.
+        self.resized()
 
 
 class ComposerScroll(Gtk.ScrolledWindow):
@@ -30,6 +29,9 @@ class ComposerScroll(Gtk.ScrolledWindow):
         self.view = ComposerTextView(self.queue_measure)
         self.set_child(self.view)
         self.view.get_buffer().connect("changed", lambda *_: self.queue_measure())
+        # GTK can finish wrapping after the buffer-change measurement. Recheck
+        # when the validated layout updates its scroll range so text isn't clipped.
+        self.get_vadjustment().connect("changed", lambda *_: self.queue_measure())
         self.connect("map", lambda *_: self.queue_measure())
 
     def queue_measure(self):

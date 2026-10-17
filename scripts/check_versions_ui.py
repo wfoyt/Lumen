@@ -34,7 +34,7 @@ def descendants(widget):
         child = child.get_next_sibling()
 
 
-with tempfile.TemporaryDirectory() as folder, patch.object(Window, 'refresh_models'), patch.object(Window, 'refresh_tools'), patch.object(Window, 'request_title'), patch.object(Application, 'notify_completion'), patch.object(Ollama, 'chat', reply):
+with tempfile.TemporaryDirectory() as folder, patch.object(Window, 'refresh_models'), patch.object(Window, 'refresh_tools'), patch.object(Window, 'request_title'), patch.object(Window, 'request_memory'), patch.object(Application, 'notify_completion'), patch.object(Ollama, 'chat', reply):
     app = Application(); app.set_flags(Gio.ApplicationFlags.NON_UNIQUE); app.register(None)
     store = Store(folder)
     file = {'name': 'notes.py', 'kind': 'file', 'content': 'print(42)\n'}

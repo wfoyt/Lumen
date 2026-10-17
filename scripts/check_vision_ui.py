@@ -2,6 +2,7 @@
 import asyncio
 import sys
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 from io import BytesIO
@@ -134,6 +135,16 @@ with tempfile.TemporaryDirectory() as folder, patch.object(Window, 'refresh_mode
         except BaseException as error:
             import traceback; traceback.print_exc(); errors.append(error); close()
         return GLib.SOURCE_REMOVE
-    def later(callback): GLib.timeout_add(550, checked, callback)
+    def later(callback):
+        deadline = time.monotonic() + 15
+        def ready():
+            if not window.draft_loading and not window.capability_jobs:
+                return checked(callback)
+            if time.monotonic() >= deadline:
+                def fail():
+                    raise AssertionError(f"Timed out waiting for {callback.__name__}")
+                return checked(fail)
+            return GLib.SOURCE_CONTINUE
+        GLib.timeout_add(100, ready)
     GLib.timeout_add(10, checked, initial); loop.run()
     if errors: raise SystemExit(1)

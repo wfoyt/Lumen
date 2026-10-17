@@ -584,15 +584,27 @@ with tempfile.TemporaryDirectory() as root, patch("ollama_gui.app.Ollama.title",
         assert isinstance(window.long_code, CodeBlock)
         assert window.long_code.view.get_buffer().get_char_count() == len(code_source)
         window.set_default_size(600, 700)
+        window.code_layout_checks = 0
         GLib.timeout_add(400, checked, check_code_layout)
         return GLib.SOURCE_REMOVE
 
     def check_code_layout():
         short = window.short_code
         code = window.long_code
+        # This follows a large batch of widget rebuilds. Wait for GTK's queued
+        # measurement/allocation instead of racing it with a fixed timer.
+        if (code.measure_pending is not None or code.content_height == 40 or
+                code.scroll.get_height() != min(CODE_PREVIEW_HEIGHT, code.content_height)):
+            window.code_layout_checks += 1
+            assert window.code_layout_checks < 50, (code.content_height, code.get_mapped(), code.view.get_width())
+            GLib.timeout_add(100, checked, check_code_layout)
+            return
         assert 40 <= short.content_height < CODE_PREVIEW_HEIGHT, short.content_height
         assert not short.reveal_button.get_visible()
-        assert code.content_height > CODE_PREVIEW_HEIGHT, code.content_height
+        assert code.content_height > CODE_PREVIEW_HEIGHT, (
+            code.content_height, code.get_mapped(), code.get_width(), code.view.get_width(),
+            code.get_root() is window, code.view.get_buffer().get_line_count(),
+            window.stack.get_visible_child_name(), window.stack.get_transition_running())
         assert code.scroll.get_min_content_height() == CODE_PREVIEW_HEIGHT
         assert code.scroll.get_height() == CODE_PREVIEW_HEIGHT, code.scroll.get_height()
         assert code.reveal_button.get_visible()

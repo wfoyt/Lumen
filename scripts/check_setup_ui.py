@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
         assert setup.navigation.get_visible_page_tag() == "welcome"
         assert window.current is None and not store.chats
         assert not models.called and not tools.called
-        for name in ("new", "preferences", "refresh", "search", "delete"):
+        for name in ("new", "preferences", "personalization", "refresh", "search", "delete"):
             assert not window.lookup_action(name).get_enabled()
         window.new_chat()
         assert not store.chats
@@ -72,14 +72,48 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
         assert not (Path(root) / "settings.json").exists()
         assert store.settings == DEFAULT_SETTINGS
         setup.tools_next.emit("clicked")
+        later(personalization)
+
+    def personalization():
+        assert setup.navigation.get_visible_page_tag() == "personalization"
+        fields = setup.personalization
+        assert fields.memory_enabled.get_active() and fields.automatic.get_active()
+        assert not fields.name_fields.get_visible() and not fields.about_fields.get_visible()
+        snapshot("personalization-defaults")
+        fields.name_enabled.set_active(True)
+        fields.name.set_text("Ada Setup")
+        fields.about_enabled.set_active(True)
+        fields.about.get_buffer().set_text("I am learning Spanish and prefer short replies.")
+        assert fields.name_fields.get_visible() and fields.about_fields.get_visible()
+        fields.name_enabled.set_active(False)
+        assert not fields.name_fields.get_visible() and fields.name.get_text() == "Ada Setup"
+        fields.name_enabled.set_active(True)
+        fields.about.get_buffer().set_text("x" * 4001)
+        setup.personalization_next.emit("clicked")
+        assert setup.navigation.get_visible_page_tag() == "personalization"
+        assert setup.personalization_error.get_visible()
+        fields.about.get_buffer().set_text("I am learning Spanish and prefer short replies.")
+        assert not setup.personalization_error.get_visible()
+        assert not (Path(root) / "settings.json").exists()
+        assert store.settings == DEFAULT_SETTINGS
+        later(personalization_filled)
+
+    def personalization_filled():
+        snapshot("personalization-filled")
+        setup.personalization_next.emit("clicked")
         later(ready)
 
     def ready():
         assert setup.navigation.get_visible_page_tag() == "ready"
         snapshot("ready")
         setup.navigation.pop()
+        assert setup.navigation.get_visible_page_tag() == "personalization"
+        assert setup.personalization.name.get_text() == "Ada Setup"
+        assert setup.personalization.about_enabled.get_active()
+        setup.navigation.pop()
         assert setup.key.get_text() == "test-only-key" and not setup.python_enabled.get_active()
         setup.tools_next.emit("clicked")
+        setup.personalization_next.emit("clicked")
         previous = copy.deepcopy(store.settings)
         with patch.object(store, "write", side_effect=OSError("Simulated save failure")):
             setup.finish_button.emit("clicked")
@@ -91,6 +125,10 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
         assert store.settings["setup_completed"]
         assert not store.settings["python_enabled"] and store.settings["brave_enabled"]
         assert store.settings["mcpServers"]["brave-search"]["env"]["BRAVE_API_KEY"] == "test-only-key"
+        saved = Store(root).settings
+        assert saved["name_enabled"] and saved["user_name"] == "Ada Setup"
+        assert saved["about_enabled"] and saved["user_about"] == "I am learning Spanish and prefer short replies."
+        assert saved["memory_enabled"] and saved["auto_memory_enabled"]
         assert len(store.chats) == 1 and not window.current["messages"]
         assert not Store(root).needs_setup
         assert models.call_count == tools.call_count == 1
@@ -154,7 +192,7 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
         setup.brave_enabled.set_active(True)
         setup.tools_enabled.set_active(False)
         setup.tools_next.emit("clicked")
-        assert setup.navigation.get_visible_page_tag() == "ready"
+        assert setup.navigation.get_visible_page_tag() == "personalization"
         setup.navigation.pop()
         setup.brave_enabled.set_active(False)
         setup.tools_enabled.set_active(True)
@@ -163,10 +201,33 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
     def narrow_tools():
         snapshot("tools-narrow")
         setup.tools_next.emit("clicked")
+        later(narrow_personalization)
+
+    def narrow_personalization():
+        assert setup.navigation.get_visible_page_tag() == "personalization"
+        fields = setup.personalization
+        assert fields.memory_enabled.get_active() and fields.automatic.get_active()
+        fields.automatic.set_active(False)
+        fields.memory_enabled.set_active(False)
+        assert not fields.automatic.get_sensitive()
+        assert not (Path(custom_root) / "settings.json").exists()
+        ancestor = fields.get_parent()
+        while ancestor and not isinstance(ancestor, Gtk.ScrolledWindow):
+            ancestor = ancestor.get_parent()
+        assert ancestor
+        ancestor.get_vadjustment().set_value(ancestor.get_vadjustment().get_upper())
+        later(narrow_personalization_choices)
+
+    def narrow_personalization_choices():
+        snapshot("personalization-narrow")
+        setup.personalization_next.emit("clicked")
         setup.finish_button.emit("clicked")
         saved = Store(custom_root)
         assert saved.settings["url"] == "https://ollama.example.test:11434"
         assert saved.settings["python_enabled"] and not saved.settings["brave_enabled"]
+        assert not saved.settings["memory_enabled"] and not saved.settings["auto_memory_enabled"]
+        assert not saved.settings["name_enabled"] and not saved.settings["about_enabled"]
+        assert "paused" in window.memory_status
         assert set(tool_servers(saved.settings)) == {"Built-in Python"}
         assert not saved.needs_setup and len(saved.chats) == 1
         window.split.set_show_sidebar(False)
@@ -175,7 +236,7 @@ with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as cus
     def narrow_chat():
         assert window.new_chat_button.get_parent() is window.chat_header_controls
         snapshot("chat-narrow")
-        print("PASS: first-run setup, default/custom URLs, validation, tool defaults and visibility, Back navigation, delayed save, save failure, interrupted setup, persistence, and adaptive New Chat placement")
+        print("PASS: setup personalization, memory defaults and opt-outs, profile visibility/validation, Back navigation, delayed save, persistence and interrupted setup, default/custom URLs, tools, save failure, and wide/narrow layout")
         close()
 
     def close():

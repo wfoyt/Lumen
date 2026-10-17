@@ -36,7 +36,7 @@ Lumen is available as a **Flatpak for Linux** from [GitHub Releases](https://git
 3. Open a terminal in the folder containing your download and install it. For the current x86_64 release:
 
 ```bash
-flatpak install --user ./Lumen-0.1.2-x86_64.flatpak
+flatpak install --user ./Lumen-0.2.0-x86_64.flatpak
 ```
 
 Open **Lumen** from your application menu. Its interface, Python tools, and PDF preview dependencies are included or installed automatically by Flatpak.
@@ -119,6 +119,7 @@ Lumen follows your desktop's light or dark appearance and adapts to smaller wind
 
 - **General:** automatic chat titles and optional model thinking.
 - **Tools:** Python, Brave Search setup and testing, and readable or raw tool activity.
+- **Personalization:** optional name and profile details, saved memories shared across chats, and automatic memory creation.
 - **Advanced:** your Ollama connection, equation rendering, custom assistant instructions, and custom MCP servers.
 
 ![Lumen's Tools preferences with controls for Python, Brave Search, and readable search and Python activity](docs/screenshots/preferences.png)
@@ -126,6 +127,46 @@ Lumen follows your desktop's light or dark appearance and adapts to smaller wind
 For extra integrations, enable **Edit Custom MCP Configuration** in **Preferences → Advanced**. MCP (Model Context Protocol) lets a model use tools supplied by another service. Lumen supports command-based servers and Streamable HTTP servers; see the [example configuration](data/mcp.example.json). For Flatpak, HTTP servers are usually easiest because programs installed on your computer aren't automatically available inside the sandbox.
 
 Only enable tools you trust: your model can call enabled tools without asking for permission each time.
+
+### Personalization and memory
+
+First-run setup includes a **Personalization** step after Tools. You can enter your name and profile details, choose which fields to share, and turn memory and automatic saving on or off. Both memory switches start on. Setup saves these choices when you select **Finish**, and Back preserves what you've entered.
+
+You can change the same fields later in **Preferences → Personalization**. Enable **Share Your Name** or **Share Details About You** to show the corresponding text field. Turning either switch off hides its field and keeps its text. Each switch controls whether that field is sent to your model. Preference changes apply to the next message, across all conversations.
+
+Lumen automatically remembers useful details from normal conversation. You don't have to say “remember this.” For example, “I'm learning Spanish” can become a saved learning goal, and “I prefer short replies” can become a response preference. Memory is on by default; any off switch you previously saved is respected. **Automatically Save Memories** controls new saving, and **Use Saved Memories** controls whether Lumen can use and update its memories at all.
+
+After each completed reply, your model compares your message with existing memories, skips facts it already knows (including paraphrases), and updates an existing entry when you share a correction. A brief **Memory updated** notice includes **Manage** to open your memories. You can review, edit or delete entries there; **Add Memory** is optional. Duplicate checks do not rewrite saved entries. This also works with Tools disabled. It does not scan old conversations or learn from attachments, web results, model replies, or model thinking. Automatic extraction uses an additional model request and requires an Ollama server/model that supports structured JSON output. Unsupported responses leave your memories unchanged and show an error in Personalization; you can still add memories manually.
+
+Wait for Lumen's memory status to confirm a change; a model's reply alone cannot confirm that a memory was saved or forgotten. Review automatic entries for accuracy. Turning automatic creation off preserves existing memories and lets the model keep using them. Turning saved memories off stops both their use and automatic creation without deleting them. Previously sent details remain in existing chat messages, so use a new chat when checking that memory is disabled. Deleting a chat keeps its saved memories; delete those separately in Personalization. Resetting preferences clears the name and profile but keeps saved memories. **Reset All Data** also erases memories.
+
+Enabled personalization and memory controls are added to custom assistant instructions too. Custom instructions replace the default tool and memory guidance; conflicting instructions can make those features behave incorrectly.
+
+### Try personalization before rebuilding
+
+Run the current checkout in a separate test app:
+
+```bash
+./scripts/test-personalization.sh
+```
+
+This opens Personalization preferences and saves test data in `/tmp/lumen-personalization-test-<your-user-id>`. Only your Ollama URL and selected model are copied for convenience. Your installed Flatpaks, existing chats, profile, memories, and API keys are unchanged. The test app starts with Tools and automatic titles off. Select an installed model if needed.
+
+To go through the complete first-run setup instead, run:
+
+```bash
+./scripts/test-personalization.sh --setup
+```
+
+Each run starts at **Welcome** in a fresh `/tmp/lumen-setup-test-…` folder and uses the app's normal defaults. Continue through **Ollama → Tools → Personalization → Ready** to try the new setup page. The folder path is printed in the terminal; finishing setup writes only to that test folder. The test launcher adds no banner to the app, and the final build has no test banner either.
+
+1. Leave **Use Saved Memories** and **Automatically Save Memories** on, close preferences, and chat normally. Try “I'm learning Spanish.” You don't need to request saving or add anything manually.
+2. Wait for **Memory updated**, then use **Manage** to see the saved detail. For an optional model check that doesn't save anything, use **Test Automatic Memory** in Personalization.
+3. Start a new chat and ask what language you're learning. Say “I'm studying Spanish” to check that a paraphrase doesn't create a second memory. Enable the separate name and profile switches if you want to share those fields too.
+4. Turn automatic creation off and confirm existing memories still work. Then turn **Use Saved Memories** off and ask in a new chat to check that saved facts are absent. Name and profile sharing have their own switches.
+5. Edit or delete memories, and restart the test app to check that your changes persist. For a completely fresh test, pass `--data-dir /tmp/lumen-personalization-fresh` with a new directory name.
+
+No Flatpak build or installation is part of this preview. Automated checks are available with `.venv/bin/python -m unittest discover -s tests` and `.venv/bin/python scripts/check_personalization_ui.py`.
 
 ### Keyboard shortcuts
 
@@ -139,7 +180,7 @@ Only enable tools you trust: your model can call enabled tools without asking fo
 
 ## Your data and privacy
 
-Chats, attachments, and settings are stored on your computer. Messages and attached content are sent to the Ollama server you choose, including a remote server if you configure one. Brave Search sends search queries to Brave; custom MCP tools may send data to their configured services. API keys are stored as plain text in a private settings file.
+Chats, attachments, settings, and saved memories are stored on your computer. Messages, attached content, enabled profile details, and enabled saved memories are sent to the Ollama server you choose, including a remote server if you configure one. Automatic memory checks send your current message and existing memories to that server. Brave Search sends search queries to Brave; custom MCP tools may send data to their configured services. API keys and personal details are stored as plain text in private app files.
 
 You select files through the file picker. The Flatpak does not request access to your entire home folder. Its data lives here:
 
@@ -147,7 +188,7 @@ You select files through the file picker. The Flatpak does not request access to
 ~/.var/app/io.github.ollamagnome.Lumen/data/ollama-gnome/
 ```
 
-**Reset to Default Settings** restores preferences and removes keys and custom MCP configurations while keeping chats. **Reset All Data** removes Lumen's chats, attachments, drafts, keys, and settings. Neither removes Ollama or its downloaded models.
+**Reset to Default Settings** restores preferences, clears your name and profile, and removes keys and custom MCP configurations while keeping chats and saved memories. **Reset All Data** also removes Lumen's chats, memories, attachments, drafts, keys, and settings. Neither removes Ollama or its downloaded models.
 
 ## Help, feedback, and screenshots
 

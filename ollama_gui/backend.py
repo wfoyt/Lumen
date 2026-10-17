@@ -11,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from .titles import clean_title, title_context
+from .memory import EXTRACTION_INSTRUCTIONS, MEMORY_SCHEMA, MAX_USER_TEXT, memory_save_opt_out, validate_memory_update
 
 
 class ToolHub:
@@ -120,6 +121,42 @@ class Ollama:
             if not title:
                 raise RuntimeError("The model returned an empty title.")
             return title
+
+    async def memory_update(self, model, user_text, memories):
+        if not user_text.strip() or memory_save_opt_out(user_text):
+            return {"save": [], "forget": []}
+        user_text = user_text[:MAX_USER_TEXT]
+        # Short request-local names are easier for small models to copy than UUIDs.
+        identifiers = {f"memory-{index + 1}": item["id"] for index, item in enumerate(memories)}
+        context = {"user_text": user_text, "existing_memories": [
+            {"id": alias, "text": item["text"], "source": item.get("source", "manual")}
+            for alias, item in zip(identifiers, memories)
+        ]}
+        async with asyncio.timeout(90), self.client() as client:
+            response = await client.post("/api/chat", json={
+                "model": model, "stream": False, "think": False,
+                "format": MEMORY_SCHEMA,
+                "messages": [{"role": "system", "content": EXTRACTION_INSTRUCTIONS +
+                              "\nJSON schema: " + json.dumps(MEMORY_SCHEMA)},
+                             {"role": "user", "content": json.dumps(context, ensure_ascii=False)}],
+                "options": {"temperature": 0, "num_predict": 1600},
+            })
+            response.raise_for_status()
+            data = response.json()
+            if data.get("error") or not data.get("done"):
+                raise RuntimeError(data.get("error") or "The memory response was incomplete.")
+            try:
+                value = json.loads(data.get("message", {}).get("content", ""))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("The model did not return valid memory JSON.") from exc
+            aliases = [{"id": alias} for alias in identifiers]
+            validate_memory_update(value, user_text, aliases)
+            for item in value["save"]:
+                if item["replaces"]:
+                    item["replaces"] = identifiers[item["replaces"]]
+            for item in value["forget"]:
+                item["id"] = identifiers[item["id"]]
+            return validate_memory_update(value, user_text, memories)
 
     async def chat(self, model, history, servers, emit, hub_factory=ToolHub):
         messages = copy.deepcopy(history)

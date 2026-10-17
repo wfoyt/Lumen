@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
 from .storage import DEFAULT_SETTINGS, brave_enabled, configure_brave, validate_url
+from .personalization_view import PersonalizationFields
 
 
 class SetupView(Gtk.Box):
@@ -95,6 +96,16 @@ class SetupView(Gtk.Box):
         self.brave_enabled.connect("notify::active", self.update_tool_fields)
         self.update_tool_fields()
         self.add_page("tools", "Tools", self.scrolled(tools), self.tools_next)
+
+        personalization = self.page_body("Make Lumen Yours", "Share a little about yourself and choose how Lumen remembers useful details between conversations.", "avatar-default-symbolic")
+        self.personalization = PersonalizationFields(settings, setup=True)
+        personalization.append(self.personalization)
+        self.personalization_error = self.error_label()
+        personalization.append(self.personalization_error)
+        self.personalization.name.connect("changed", self.clear_personalization_error)
+        self.personalization.about.get_buffer().connect("changed", self.clear_personalization_error)
+        self.personalization_next = self.next_button("Next", self.personalization_continue)
+        self.add_page("personalization", "Personalization", self.scrolled(personalization), self.personalization_next)
 
         ready = Adw.StatusPage(paintable=paintable, title="Welcome to Lumen",
                               description="You’re ready to begin. Finish setup to open your first chat, then choose a model and ask a question.")
@@ -200,10 +211,27 @@ class SetupView(Gtk.Box):
             self.key_error.set_visible(True)
             self.key.grab_focus()
             return
-        self.navigation.push_by_tag("ready")
+        self.navigation.push_by_tag("personalization")
+
+    def clear_personalization_error(self, *_):
+        self.personalization_error.set_visible(False)
+
+    def personalization_valid(self):
+        errors = self.personalization.validation_errors()
+        self.personalization_error.set_text(" ".join(errors))
+        self.personalization_error.set_visible(bool(errors))
+        return not errors
+
+    def personalization_continue(self, *_):
+        if self.personalization_valid():
+            self.navigation.push_by_tag("ready")
 
     def finish(self, *_):
+        if not self.personalization_valid():
+            self.navigation.pop_to_tag("personalization")
+            return
         cfg = {**self.settings, "url": self.connection_url(), "tools_enabled": self.tools_enabled.get_active(),
+               **self.personalization.values(self.settings),
                "python_enabled": self.python_enabled.get_active(), "brave_enabled": self.brave_enabled.get_active(),
                "mcpServers": configure_brave(self.settings["mcpServers"], self.key.get_text()), "setup_completed": True}
         if "brave-search" in cfg["mcpServers"]:

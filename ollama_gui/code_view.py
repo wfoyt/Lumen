@@ -22,7 +22,6 @@ class CodeTextView(GtkSource.View):
                          wrap_mode=Gtk.WrapMode.WORD_CHAR, left_margin=16, right_margin=16,
                          top_margin=8, bottom_margin=16)
         self.resized = resized
-        self.previous_width = -1
         self.style_handler = None
 
     def update_style(self, *_):
@@ -43,9 +42,7 @@ class CodeTextView(GtkSource.View):
 
     def do_size_allocate(self, width, height, baseline):
         GtkSource.View.do_size_allocate(self, width, height, baseline)
-        if width != self.previous_width:
-            self.previous_width = width
-            self.resized()
+        self.resized()
 
 
 class CodeBlock(Gtk.Box):
@@ -76,6 +73,9 @@ class CodeBlock(Gtk.Box):
         # The viewport clips the preview but never moves within it, including
         # keyboard navigation or selection dragging. Only Show More reveals it.
         self.scroll.get_vadjustment().connect("value-changed", self.lock_preview)
+        # A newly validated text layout can change its height without changing
+        # the view's width. Refresh the preview after that layout is available.
+        self.scroll.get_vadjustment().connect("changed", lambda *_: self.queue_measure())
         self.scroll_controller = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.BOTH_AXES)
         self.scroll_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         self.scroll_controller.connect("scroll", self.scroll_conversation)
